@@ -1,0 +1,23 @@
+{
+    "name" : "location_extractor_config",
+    "postgres_location" : "postgresql://jdunnmon:123@localhost:5432",
+    "postgres_db_name" : "memex_db",
+    "parallel" : 16,
+    "data_path":"../../data",
+    "labeled_data_file":"labeled_data_mjs_02282018.txt",
+    "unlabeled_data_file":"unlabeled_data_mjs_02282018.txt",
+    "max_docs": 4,
+    "parameters":{
+        "experiment_name": "extractor_test_v1",
+        "output_path": "../run_logs",
+        "source_data_dir": "../../data",
+        "generative_model":
+            {
+                "step_size_start":1e-7,
+                "step_size_end":1e-4,
+                "decay":[1.0, 0.95, 0.9],
+                "epochs":[50, 100],
+                "n":5
+                }
+    }  
+}
