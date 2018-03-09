@@ -6,7 +6,7 @@
     "data_path":"../../data",
     "labeled_data_file":"labeled_data_mjs_02282018.txt",
     "unlabeled_data_file":"unlabeled_data_mjs_02282018.txt",
-    "max_docs": 4,
+    "max_docs": 0,
     "parameters":{
         "experiment_name": "extractor_test_v1",
         "output_path": "../run_logs",
