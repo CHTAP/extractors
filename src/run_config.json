@@ -1,7 +1,7 @@
 {
     "name" : "location_extractor_config",
     "postgres_location" : "postgresql://jdunnmon:123@localhost:5432",
-    "postgres_db_name" : "memex_db",
+    "postgres_db_name" : "memex_json_db",
     "parallel" : 32,
     "data_path":"../../data",
     "labeled_data_file":"labeled_data_mjs_02282018.txt",
