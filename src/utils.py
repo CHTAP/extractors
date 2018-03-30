@@ -10,9 +10,13 @@ import pandas as pd
 
 
 from fonduer.snorkel.utils import ProgressBar
-from fonduer.snorkel.models import GoldLabel, GoldLabelKey
+from fonduer.snorkel.models import GoldLabel, GoldLabelKey, Document
 
 from fonduer import HTMLPreprocessor
+
+#from snorkel.contrib.fonduer import HTMLPreprocessor
+#from snorkel.models import GoldLabel, GoldLabelKey, Document
+#from snorkel.utils import ProgressBar
 
 class HTMLListPreprocessor(HTMLPreprocessor):
     
@@ -50,7 +54,7 @@ class MEMEXJsonPreprocessor(HTMLListPreprocessor):
         self.file_list = file_list
         
     def _get_files(self,path_list):
-        fpaths = [os.path.join(self.path,fl) for fl in path_list]
+        fpaths = [fl for fl in path_list]
         return fpaths
     
     def _can_read(self, fpath):
@@ -64,7 +68,7 @@ class MEMEXJsonPreprocessor(HTMLListPreprocessor):
         for fp in self._get_files(self.file_list):
             file_name = os.path.basename(fp)
             if self._can_read(file_name):
-                for doc, text in self.parse_file(fp, file_name):
+                for doc, text in self.parse_file(self.path, file_name):
                     yield doc, text
                     doc_count += 1
                     if doc_count >= self.max_docs:
@@ -75,18 +79,22 @@ class MEMEXJsonPreprocessor(HTMLListPreprocessor):
             yield ''.join(chain([line], islice(f, n - 1)))
         
     def _read_content_file(self, fl):
+        json_lst = []
+        #with codecs.open(fl, encoding=self.encoding) as f:
         with open(fl) as f:
             for chunk in self._lines_per_n(f, 6):
                 jfile = json.loads(chunk)
+                json_lst.append(jfile)
         json_pd = pd.DataFrame(json_lst).dropna()
         return json_pd
     
     def parse_file(self, fp, file_name):
         df = self._read_content_file(os.path.join(fp,file_name))
-        for row in df.iterrows():
+        for index, row in df.iterrows():
             name = row.url
             stable_id = self.get_stable_id(name)
-            text = row.content
+            # getting rid of first and last quotes
+            text = row.content[1:-1].encode(self.encoding)
             yield Document(name=name, stable_id=stable_id, text=str(text),
                                meta={'file_name' : file_name}), str(text)
     
