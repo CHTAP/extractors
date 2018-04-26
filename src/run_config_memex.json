@@ -3,9 +3,8 @@
     "postgres_location" : "postgresql://jdunnmon:123@localhost:5432",
     "postgres_db_name" : "memex_json_db",
     "parallel" : 32,
-    "data_path":"../../s3_sync",
-    "labeled_data_path":"content.tsv",
-    "unlabeled_data_path":"test-full-content",
+    "labeled_data_path":"../../content.tsv",
+    "unlabeled_data_path":"../../memex-data/escorts/2014",
     "max_docs": 100,
     "parameters":{
         "experiment_name": "extractor_test_v1",
