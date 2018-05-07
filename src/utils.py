@@ -14,6 +14,8 @@ from fonduer.snorkel.models import GoldLabel, GoldLabelKey, Document
 
 from fonduer import HTMLPreprocessor
 
+import gzip
+
 #from snorkel.contrib.fonduer import HTMLPreprocessor
 #from snorkel.models import GoldLabel, GoldLabelKey, Document
 #from snorkel.utils import ProgressBar
@@ -98,7 +100,7 @@ class MEMEXJsonPreprocessor(HTMLListPreprocessor):
             yield Document(name=name, stable_id=stable_id, text=str(text),
                                meta={'file_name' : file_name}), str(text)
 
-class MEMEXJsonLPreprocessor(HTMLListPreprocessor):
+class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
     
     def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf'), lines_per_entry=6, verbose=False):
         self.path = path
@@ -113,7 +115,7 @@ class MEMEXJsonLPreprocessor(HTMLListPreprocessor):
         return fpaths
     
     def _can_read(self, fpath):
-        return fpath.endswith('jsonl')  
+        return fpath.endswith('jsonl') or fpath.endswith('gz')
     
     def generate(self):
         """
@@ -136,21 +138,33 @@ class MEMEXJsonLPreprocessor(HTMLListPreprocessor):
         
     def _read_content_file(self, fl):
         json_lst = []
-        #with codecs.open(fl, encoding=self.encoding) as f:
-        with open(fl) as f:
-            for chunk in self._lines_per_n(f, self.lines_per_entry):
+        if fl.endswith('gz'):
+            with gzip.GzipFile(fl, 'r') as fin: 
+                f = fin.read()
+            for chunk in f.splitlines():
                 jfile = json.loads(chunk)
                 json_lst.append(jfile)
+
+        elif fl.endswith('jsonl'):
+            with open(fl) as f:
+                for chunk in self._lines_per_n(f, self.lines_per_entry):
+                    jfile = json.loads(chunk)
+                    json_lst.append(jfile)
+        else:
+            print('Unrecognized file type!')
+                    
         json_pd = pd.DataFrame(json_lst)
-       # json_pd = pd.DataFrame(json_lst).dropna()
+        #json_pd = pd.DataFrame(json_lst).dropna()
         return json_pd
     
     def parse_file(self, file_name):
         df = self._read_content_file(file_name)
-        for index, row in df.iterrows():
-            name = row.url
-            stable_id = self.get_stable_id(name)
-            text = row.raw_content[1:-1].encode(self.encoding)
-            yield Document(name=name, stable_id=stable_id, text=str(text),
-                               meta={'file_name' : file_name}), str(text)
-    
+        if 'raw_content' in df.keys():
+            for index, row in df.iterrows():
+                name = row.url
+                stable_id = self.get_stable_id(name)
+                text = row.raw_content[1:-1].encode(self.encoding)
+                yield Document(name=name, stable_id=stable_id, text=str(text),
+                                   meta={'file_name' : file_name}), str(text)
+        else:
+            print('File with no raw content!')
