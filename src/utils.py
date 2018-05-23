@@ -163,8 +163,12 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
             for index, row in df.iterrows():
                 name = row.url
                 stable_id = self.get_stable_id(name)
-                text = row.raw_content[1:-1].encode(self.encoding)
-                yield Document(name=name, stable_id=stable_id, text=str(text),
-                                   meta={'file_name' : file_name}), str(text)
+                try:
+                    text = ' '.join(row.raw_content[1:-1].replace('<br>', '').split())
+                #text = row.raw_content[1:-1].encode(self.encoding)
+                    yield Document(name=name, stable_id=stable_id, text=str(text),
+                                       meta={'file_name' : file_name}), str(text)
+                except:
+                    print('Failed to parse document!')
         else:
             print('File with no raw content!')
