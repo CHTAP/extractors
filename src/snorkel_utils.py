@@ -1,5 +1,6 @@
 import codecs
 import ast
+import json
 
 from builtins import range
 import csv
@@ -12,7 +13,7 @@ import numpy as np
 import re
 
 from snorkel.parser import DocPreprocessor
-from snorkel.models import Document, StableLabel
+from snorkel.models import Document, StableLabel, GoldLabel, GoldLabelKey
 from snorkel.utils import ProgressBar
 
 from snorkel.db_helpers import reload_annotator_labels
@@ -48,7 +49,7 @@ class MemexTSVDocPreprocessor(DocPreprocessor):
                 yield doc, doc_text
                 
                 
-def create_test_train_splits(docs, dev_frac=0.1, test_frac=0.1, seed=123):
+def create_test_train_splits(docs, quantity, dev_frac=0.1, test_frac=0.1, seed=123):
     ld   = len(docs)
     dev_set_sz = np.round(ld*dev_frac)
     test_set_sz = np.round(ld*test_frac)
@@ -68,21 +69,24 @@ def create_test_train_splits(docs, dev_frac=0.1, test_frac=0.1, seed=123):
     random.shuffle(docs)
 
     # Adding unlabeled data to train set, 
-    # labeled data to dev/test sets in alternating fashion
+    # ensuring gold labeled data is added to test/dev
     for i, doc in enumerate(docs):
-        if i<train_set_sz:
+        try:
+            quant_ind = check_extraction_for_doc(doc, quantity, extractions_field='extractions')
+        except:
+            print('Malformatted JSON Entry!')
+        if quant_ind and len(dev_docs)<dev_set_sz:
+            dev_docs.add(doc)
+            for s in doc.sentences:
+                dev_sents.add(s)
+        elif quant_ind and len(test_docs)<test_set_sz:
+            test_docs.add(doc)
+            for s in doc.sentences:
+                test_sents.add(s)        
+        elif len(train_docs)<train_set_sz:
             train_docs.add(doc)
             for s in doc.sentences:
                 train_sents.add(s)
-        else:
-            if len(dev_docs)<=len(test_docs):
-                dev_docs.add(doc)
-                for s in doc.sentences:
-                    dev_sents.add(s)
-            else:
-                test_docs.add(doc)
-                for s in doc.sentences:
-                    test_sents.add(s)
                 
     #Printing length of train/test/dev sets
     print(f'Train: {len(train_docs)} Docs, {len(train_sents)} Sentences')
@@ -92,14 +96,33 @@ def create_test_train_splits(docs, dev_frac=0.1, test_frac=0.1, seed=123):
     return list(train_docs), list(dev_docs), list(test_docs), \
            list(train_sents), list(dev_sents), list(test_sents)
 
+def check_extraction_for_doc(doc, quantity, extractions_field='extractions'):
+    if quantity is None:
+        return True
+    dict_string = doc.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    extraction_dict = json.loads(dict_string)
+    if quantity in list(extraction_dict.keys()):
+        return True
+    return False
+
 def get_extraction_from_candidate(can,quantity,extractions_field='extractions'):
-    dict_string = can.get_parent().document.meta[extractions_field].replace('\n','').strip('"').replace('""',"'")
-    extraction = ast.literal_eval(dict_string)[quantity]
+    dict_string = can.get_parent().document.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    extraction = json.loads(dict_string)[quantity]
     return extraction
 
+def get_candidate_stable_id(can):
+    return can.get_parent().stable_id+str(can.id)
+
 def get_gold_labels_from_meta(session, candidate_class, target, split, annotator='gold'):
+    
     candidates = session.query(candidate_class).filter(
         candidate_class.split == split).all()
+    
+    ak = session.query(GoldLabelKey).filter(GoldLabelKey.name == annotator).first()
+    if ak is None:
+        ak = GoldLabelKey(name=annotator)
+        session.add(ak)
+        session.commit()   
     
     # Getting all candidates from dev/test set only (splits 1 and 2)
     candidates = session.query(candidate_class).filter(candidate_class.split == split).all()
@@ -113,8 +136,8 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
     # For each candidate, add appropriate gold label
     for i, c in enumerate(candidates):
         pb.bar(i)
-        # Get document name for candidate
-        stable_id = c.get_parent().stable_id
+        # Get stable id for candidate
+        stable_id = get_candidate_stable_id(c)
         # Get text span for candidate
         ext = getattr(c,target)
         val = list(filter(None, re.split('[,/:\s]',ext.get_span().lower())))
@@ -127,30 +150,22 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
             continue
         # Handling location extraction
         if target == 'location':
-                if target_strings == []:
-                    targets = ''
-                elif type(target_strings) == list :
-                    targets = [target.lower() for target in targets]
-                elif type(target_strings) == str:
-                    targets = list(filter(None,re.split('[,/:\s]',target_strings.lower())))
-                if match_val_targets_location(val,targets):
-                    label = 1
-                else:
-                    label = -1
-                               
-        query = session.query(StableLabel).filter(
-            StableLabel.context_stable_ids == stable_id)
-        query = query.filter(StableLabel.annotator_name == annotator) 
-               
-        if query.count() == 0:           
-            # Matching target label string to extract span, adding TRUE label if found, FALSE if not
-            # This conditional could be improved (use regex, etc.)
-            session.add(StableLabel(
-                context_stable_ids=stable_id,
-                annotator_name=annotator,
-                value=label
-            ))
-            labels+=1
+            if target_strings == []:
+                targets = ''
+            elif type(target_strings) == list :
+                targets = [target.lower() for target in targets]
+            elif type(target_strings) == str:
+                targets = list(filter(None,re.split('[,/:\s]',target_strings.lower())))
+  
+            if match_val_targets_location(val,targets):
+                label = 1
+            else:
+                label = -1
+                    
+            existing_label = session.query(GoldLabel).filter(GoldLabel.key == ak).filter(GoldLabel.candidate == c).first()
+            if existing_label is None:
+                session.add(GoldLabel(candidate=c, key=ak, value=label))                        
+                labels+=1
 
     pb.close()
     print("AnnotatorLabels created: %s" % (labels,))
@@ -159,10 +174,21 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
     session.commit()
     
     # Reload annotator labels
-    reload_annotator_labels(session, candidate_class, annotator,
-                            split=split, filter_label_split=False)
+    #reload_annotator_labels(session, candidate_class, annotator,
+    #                        split=split, filter_label_split=False)
 
-    
+       # query = session.query(StableLabel).filter(
+       #     StableLabel.context_stable_ids == stable_id)
+       # query = query.filter(StableLabel.annotator_name == annotator) 
+               
+        #if query.count() == 0:           
+            # Matching target label string to extract span, adding TRUE label if found, FALSE if not
+            # This conditional could be improved (use regex, etc.)
+        #    session.add(StableLabel(
+        #        context_stable_ids=stable_id,
+        #        annotator_name=annotator,
+        #        value=label
+        #    ))    
     
 #### UTILS FOR CHECKING MATCHES WITH GOLD LABELS ####
 
