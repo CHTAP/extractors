@@ -1,6 +1,8 @@
+import os
 import codecs
 import ast
 import json
+from bs4 import BeautifulSoup
 
 from builtins import range
 import csv
@@ -10,13 +12,16 @@ import editdistance
 
 import random
 import numpy as np
+import pandas as pd
 import re
 
-from snorkel.parser import DocPreprocessor
+from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, StableLabel, GoldLabel, GoldLabelKey
 from snorkel.utils import ProgressBar
 
 from snorkel.db_helpers import reload_annotator_labels
+
+import gzip
 
 class MemexTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file with one (doc_name <tab> doc_text) per line"""
@@ -47,8 +52,7 @@ class MemexTSVDocPreprocessor(DocPreprocessor):
                           'extractions':extractions}
                 )
                 yield doc, doc_text
-                
-                
+                          
 def create_test_train_splits(docs, quantity, dev_frac=0.1, test_frac=0.1, seed=123):
     ld   = len(docs)
     dev_set_sz = np.round(ld*dev_frac)
@@ -246,6 +250,119 @@ def match_val_targets_location(val,targets):
     return False
 
 
+def retrieve_all_files(dr):
+    """
+    Recurively returns all files in root directory
+    """
+    lst = []
+    for root, directories, filenames in os.walk(dr): 
+         for filename in filenames: 
+                lst.append(os.path.join(root,filename))
+    return lst
+
+
+class HTMLListPreprocessor(HTMLDocPreprocessor):
+    
+    def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf')):
+        self.path = path
+        self.encoding = encoding
+        self.max_docs = max_docs
+        self.file_list = file_list
+        
+    def _get_files(self,path_list):
+        fpaths = [os.path.join(self.path,fl) for fl in path_list]
+        return fpaths
+    
+    def generate(self):
+        """
+        Parses a file or directory of files into a set of Document objects.
+        """
+        doc_count = 0
+        for fp in self._get_files(self.file_list):
+            file_name = os.path.basename(fp)
+            if self._can_read(file_name):
+                for doc, text in self.parse_file(fp, file_name):
+                    yield doc, text
+                    doc_count += 1
+                    if doc_count >= self.max_docs:
+                        return
+                    
+class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
+    
+    def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf'), lines_per_entry=6, verbose=False):
+        self.path = path
+        self.encoding = encoding
+        self.max_docs = max_docs
+        self.file_list = file_list
+        self.lines_per_entry = lines_per_entry
+        self.verbose=verbose
+        
+    def _get_files(self,path_list):
+        fpaths = [fl for fl in path_list]
+        return fpaths
+    
+    def _can_read(self, fpath):
+        return fpath.endswith('jsonl') or fpath.endswith('gz')
+    
+    def generate(self):
+        """
+        Parses a file or directory of files into a set of Document objects.
+        """
+        doc_count = 0
+        for file_name in self._get_files(self.file_list):
+            if self._can_read(file_name):
+                for doc, text in self.parse_file(file_name):
+                    yield doc, text
+                    doc_count += 1
+                    if self.verbose:
+                        print(f'Parsed {doc_count} docs...')
+                    if doc_count >= self.max_docs:
+                        return
+                    
+    def _lines_per_n(self, f, n):
+        for line in f:
+            yield ''.join(chain([line], islice(f, n - 1)))
+        
+    def _read_content_file(self, fl):
+        json_lst = []
+        if fl.endswith('gz'):
+            with gzip.GzipFile(fl, 'r') as fin: 
+                f = fin.read()
+            for chunk in f.splitlines():
+                jfile = json.loads(chunk)
+                json_lst.append(jfile)
+
+        elif fl.endswith('jsonl'):
+            with open(fl) as f:
+                for chunk in self._lines_per_n(f, self.lines_per_entry):
+                    jfile = json.loads(chunk)
+                    json_lst.append(jfile)
+        else:
+            print('Unrecognized file type!')
+                    
+        json_pd = pd.DataFrame(json_lst)
+        #json_pd = pd.DataFrame(json_lst).dropna()
+        return json_pd
+    
+    def parse_file(self, file_name):
+        df = self._read_content_file(file_name)
+        if 'raw_content' in df.keys():
+            for index, row in df.iterrows():
+                name = row.url
+                stable_id = self.get_stable_id(name)
+                #try:
+                html = BeautifulSoup(row.raw_content, 'lxml')
+                text = list(filter(self._cleaner, html.findAll(text=True)))
+                text = ' '.join(str(self._strip_special(s)) for s in text if s != '\n')
+                   #text = ' '.join(row.raw_content[1:-1].replace('<br>', '').split())
+                #text = row.raw_content[1:-1].encode(self.encoding)
+                yield Document(name=name, stable_id=stable_id,
+                                       meta={'file_name' : file_name}), str(text)
+                #except:
+                #    print('Failed to parse document!')
+        else:
+            print('File with no raw content!')
+            
 
 #def load_external_labels(session, candidate_class, split, preprocessor, annotator='gold',
 #    label_fname='data/cdr_relations_gold.pkl', id_fname='data/doc_ids.pkl'):

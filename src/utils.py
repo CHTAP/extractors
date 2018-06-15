@@ -9,8 +9,8 @@ from itertools import islice, chain
 import pandas as pd
 
 
-from fonduer.snorkel.utils import ProgressBar
-from fonduer.snorkel.models import GoldLabel, GoldLabelKey, Document
+from fonduer.utils import ProgressBar
+from fonduer.models import GoldLabel, GoldLabelKey, Document
 
 from fonduer import HTMLPreprocessor
 
