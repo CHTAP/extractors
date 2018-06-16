@@ -9,8 +9,8 @@ from itertools import islice, chain
 import pandas as pd
 
 
-from fonduer.snorkel.utils import ProgressBar
-from fonduer.snorkel.models import GoldLabel, GoldLabelKey, Document
+from fonduer.utils import ProgressBar
+from fonduer.models import GoldLabel, GoldLabelKey, Document
 
 from fonduer import HTMLPreprocessor
 
@@ -102,12 +102,11 @@ class MEMEXJsonPreprocessor(HTMLListPreprocessor):
 
 class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
     
-    def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf'), lines_per_entry=6, verbose=False):
+    def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf'), verbose=False):
         self.path = path
         self.encoding = encoding
         self.max_docs = max_docs
         self.file_list = file_list
-        self.lines_per_entry = lines_per_entry
         self.verbose=verbose
         
     def _get_files(self,path_list):
@@ -125,7 +124,8 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
         for file_name in self._get_files(self.file_list):
             if self._can_read(file_name):
                 for doc, text in self.parse_file(file_name):
-                    yield doc, text
+                    if (doc is not None) and (text is not None):
+                        yield doc, text
                     doc_count += 1
                     if self.verbose:
                         print(f'Parsed {doc_count} docs...')
@@ -147,7 +147,7 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
 
         elif fl.endswith('jsonl'):
             with open(fl) as f:
-                for chunk in self._lines_per_n(f, self.lines_per_entry):
+                for chunk in self._lines_per_n(f, 6):
                     jfile = json.loads(chunk)
                     json_lst.append(jfile)
         else:
