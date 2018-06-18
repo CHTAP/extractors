@@ -165,7 +165,7 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
         else:
             try:
                 target_strings = gold_dict[url]
-            else:
+            except:
                 print('Gold label not found!')
                 continue
         # Handling location extraction
@@ -173,7 +173,7 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
             if target_strings == []:
                 targets = ''
             elif type(target_strings) == list :
-                targets = [target.lower() for target in targets]
+                targets = [target.lower() for target in target_strings]
             elif type(target_strings) == str:
                 targets = list(filter(None,re.split('[,/:\s]',target_strings.lower())))
   
@@ -366,12 +366,13 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
         if 'raw_content' in df.keys():
             for index, row in df.iterrows():
                 name = row.url
+                memex_doc_id = row.doc_id
                 # Added to avoid duplicate keys
                 if name in self.urls:
                     continue
                 if type(row.raw_content) == float:
                     continue
-                stable_id = self.get_stable_id(str(file_name)+'-'+str(name))
+                stable_id = self.get_stable_id(memex_doc_id)
                 #try:
                 html = BeautifulSoup(row.raw_content, 'lxml')
                 text = list(filter(self._cleaner, html.findAll(text=True)))
@@ -380,7 +381,7 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
                 #text = row.raw_content[1:-1].encode(self.encoding)
                 self.urls.append(name)
                 yield Document(name=name, stable_id=stable_id,
-                                       meta={'file_name' : file_name}), str(text)
+                                       meta={'file_name' : file_name, memex_doc_id : memex_doc_id}), str(text)
                 #except:
                 #    print('Failed to parse document!')
         else:
