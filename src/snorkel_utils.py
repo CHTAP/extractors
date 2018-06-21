@@ -3,6 +3,8 @@ import codecs
 import ast
 import json
 from bs4 import BeautifulSoup
+import itertools
+import numpy as np
 
 from builtins import range
 import csv
@@ -126,6 +128,13 @@ def get_extraction_from_candidate(can,quantity,extractions_field='extractions'):
 def get_candidate_stable_id(can):
     return can.get_parent().stable_id+str(can.id)
 
+def check_gold_perc(session):
+    gold_labels = session.query(GoldLabel).all()
+    gold_vals = np.array([a.value for a in gold_labels])
+    perc_pos = np.sum(gold_vals == 1)/len(gold_vals)
+    print(f'Percent Positive: {perc_pos:0.2f}')
+    return perc_pos
+
 def get_gold_labels_from_meta(session, candidate_class, target, split, annotator='gold', gold_dict=None):
     
     candidates = session.query(candidate_class).filter(
@@ -176,8 +185,10 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
                 targets = [target.lower() for target in target_strings]
             elif type(target_strings) == str:
                 targets = list(filter(None,re.split('[,/:\s]',target_strings.lower())))
-  
-            if match_val_targets_location(val,targets):
+                
+            targets_split = list(itertools.chain.from_iterable([t.split() for t in targets]))
+
+            if match_val_targets_location(val,targets) or match_val_targets_location(val,targets_split):
                 label = 1
             else:
                 label = -1
@@ -266,6 +277,9 @@ def match_val_targets_location(val,targets):
     return False
 
 
+def remove_gold_labels(session):
+    session.query(GoldLabel).delete()
+    
 def retrieve_all_files(dr):
     """
     Recurively returns all files in root directory
@@ -305,7 +319,7 @@ class HTMLListPreprocessor(HTMLDocPreprocessor):
                     
 class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
     
-    def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf'), lines_per_entry=6, verbose=False):
+    def __init__(self, path, file_list, encoding="utf-8", max_docs=float('inf'), lines_per_entry=6, verbose=False, content_field='raw_content'):
         self.path = path
         self.encoding = encoding
         self.max_docs = max_docs
@@ -313,6 +327,7 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
         self.lines_per_entry = lines_per_entry
         self.verbose=verbose
         self.urls = []
+        self.content_field = content_field
         
     def _get_files(self,path_list):
         fpaths = [fl for fl in path_list]
@@ -363,25 +378,29 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
     
     def parse_file(self, file_name):
         df = self._read_content_file(file_name)
-        if 'raw_content' in df.keys():
+        if (self.content_field in df.keys()):
             for index, row in df.iterrows():
                 name = row.url
                 memex_doc_id = row.doc_id
+                content = getattr(row,self.content_field)
                 # Added to avoid duplicate keys
                 if name in self.urls:
                     continue
-                if type(row.raw_content) == float:
+                if type(content) == float:
+                    continue
+                if content is None:
                     continue
                 stable_id = self.get_stable_id(memex_doc_id)
                 #try:
-                html = BeautifulSoup(row.raw_content, 'lxml')
+                
+                html = BeautifulSoup(content, 'lxml')
                 text = list(filter(self._cleaner, html.findAll(text=True)))
                 text = ' '.join(str(self._strip_special(s)) for s in text if s != '\n')
                    #text = ' '.join(row.raw_content[1:-1].replace('<br>', '').split())
                 #text = row.raw_content[1:-1].encode(self.encoding)
                 self.urls.append(name)
                 yield Document(name=name, stable_id=stable_id,
-                                       meta={'file_name' : file_name, memex_doc_id : memex_doc_id}), str(text)
+                                       meta={'file_name' : file_name, 'memex_doc_id' : memex_doc_id}), str(text)
                 #except:
                 #    print('Failed to parse document!')
         else:
