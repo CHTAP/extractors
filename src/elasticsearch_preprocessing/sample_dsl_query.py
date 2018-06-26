@@ -1,22 +1,58 @@
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch_dsl import Search, Q, utils
 import csv
 import pprint
+from requests_aws4auth import AWS4Auth
+import os
+import boto3 
 
 def pprint_field(fld):
     if type(fld) == utils.AttrDict:
         fld = pprint.pformat(fld.to_dict())
     return fld.encode('utf-8')
 
-client = Elasticsearch("https://search-chtap-4-6fit6undgq3aw2r3k6yxcibyjy.us-east-1.es.amazonaws.com", timeout=600)
+AWS_ACCESS_KEY = os.environ["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+region = 'us-east-1' # For example, us-east-1
+service = 'es'
+host = "https://search-chtap-4-6fit6undgq3aw2r3k6yxcibyjy.us-east-1.es.amazonaws.com"
 
+if len(AWS_ACCESS_KEY) == 0:
+    print("Error: Environment variable for AWS_ACCESS_KEY not set.")
+    sys.exit()
+if len(AWS_SECRET_KEY) == 0:
+    print("Error: Environment variable for AWS_SECRET_KEY not set.")
+    sys.exit()
+if len(host) == 0:
+    print("Error: Environment variable for AWS_ES_HOST not set.")
+    sys.exit()
+
+awsauth = AWS4Auth(AWS_ACCESS_KEY, AWS_SECRET_KEY, region, service)
+
+# Use this for IP permissions
+#client = Elasticsearch(host, timeout=600)
+
+client = Elasticsearch(
+        hosts = [{'host': host, 'port': 443}],
+        http_auth = awsauth,
+        use_ssl = True,
+        verify_certs = True,
+        http_compress = True,
+        timeout = 60,
+        request_timeout=30,
+        dead_timeout=60,
+        retry_on_timeout=True,
+        connection_class = RequestsHttpConnection
+        )
+
+import ipdb; ipdb.set_trace()
 index = 'chtap'
 
 max_docs = 1000
 
 q = Q('bool',must=[
       Q("exists",field="memex.extracted_text"),
-      Q("exists",field="content.extractions.phone"),
+   #   Q("exists",field="content.extractions.phone"),
       Q("exists",field="content.extraction.location")
       #Q("query_string",**{"default_field":"content.extractions", "query":"*location*"}),
       #Q("nested", path="memex", query=Q("exists",field="memex.extractions"))
