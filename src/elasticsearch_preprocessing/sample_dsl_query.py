@@ -15,7 +15,7 @@ AWS_ACCESS_KEY = os.environ["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 region = 'us-east-1' # For example, us-east-1
 service = 'es'
-host = "https://search-chtap-4-6fit6undgq3aw2r3k6yxcibyjy.us-east-1.es.amazonaws.com"
+host = "search-chtap-4-6fit6undgq3aw2r3k6yxcibyjy.us-east-1.es.amazonaws.com"
 
 if len(AWS_ACCESS_KEY) == 0:
     print("Error: Environment variable for AWS_ACCESS_KEY not set.")
@@ -45,7 +45,7 @@ client = Elasticsearch(
         connection_class = RequestsHttpConnection
         )
 
-import ipdb; ipdb.set_trace()
+#import ipdb; ipdb.set_trace()
 index = 'chtap'
 
 max_docs = 1000
@@ -53,7 +53,7 @@ max_docs = 1000
 q = Q('bool',must=[
       Q("exists",field="memex.extracted_text"),
    #   Q("exists",field="content.extractions.phone"),
-      Q("exists",field="content.extraction.location")
+      Q("exists",field="content.extractions.location")
       #Q("query_string",**{"default_field":"content.extractions", "query":"*location*"}),
       #Q("nested", path="memex", query=Q("exists",field="memex.extractions"))
       ])

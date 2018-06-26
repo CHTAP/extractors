@@ -25,6 +25,47 @@ from snorkel.db_helpers import reload_annotator_labels
 
 import gzip
 
+class ESTSVDocPreprocessor(DocPreprocessor):
+    """Simple parsing of TSV file with one (doc_name <tab> doc_text) per line"""
+    
+    def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False):
+        super().__init__(path, encoding=encoding, max_docs=max_docs)
+        self.verbose = verbose
+        self.clean_docs = clean_docs
+
+    def parse_file(self, fp, file_name):
+        with codecs.open(fp, encoding=self.encoding) as tsv:
+            for ind, line in enumerate(tsv):
+                if ind == 0:
+                    continue
+                try:
+                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                except:
+                    print('Malformatted Line!')
+                    continue
+                doc_text = content
+                doc_name = memex_id
+                source = content_type
+                extractions = extractions
+                if len(doc_text) < 10:
+                    if self.verbose:
+                        print('Short Doc!')
+                    continue
+                stable_id = self.get_stable_id(doc_name)
+                
+                if self.clean_docs:
+                    doc_text = doc_text.replace('\n',' ').replace('\t',' ').replace('<br>', ' ')
+                    # Eliminating extra space
+                    doc_text = " ".join(doc_text.split())
+                
+                doc = Document(
+                    name=doc_name, stable_id=stable_id,
+                    meta={'domain': domain,
+                          'source': source,
+                          'extractions':extractions}
+                )
+                yield doc, doc_text
+                
 class MemexTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file with one (doc_name <tab> doc_text) per line"""
     
@@ -92,11 +133,13 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
     for i, doc in enumerate(docs):
         try:
             if gold_dict is None:
-                quant_ind = check_extraction_for_doc(doc, quantity, extractions_field='extractions')
+                strip_end = False # added to work with ES data
+                quant_ind = check_extraction_for_doc(doc, quantity, extractions_field='extractions',strip_end=strip_end)
             else:
                 quant_ind = doc.name in gold_list
         except:
             print('Malformatted JSON Entry!')
+            quant_ind = False
         if quant_ind and (len(dev_docs)<dev_set_sz )and (len(dev_docs) < len(test_docs)):
             dev_docs.add(doc)
             for s in doc.sentences:
@@ -118,10 +161,14 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
     return list(train_docs), list(dev_docs), list(test_docs), \
            list(train_sents), list(dev_sents), list(test_sents)
 
-def check_extraction_for_doc(doc, quantity, extractions_field='extractions'):
+def check_extraction_for_doc(doc, quantity, extractions_field='extractions', strip_end=False):
     if quantity is None:
         return True
-    dict_string = doc.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    import pdb; pdb.set_trace()
+   # dict_string = doc.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    dict_string = doc.meta[extractions_field].replace('|','').strip('\n').strip('b').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    if strip_end:
+        dict_string = dict_string[1:-1]
     extraction_dict = json.loads(dict_string)
     if quantity in list(extraction_dict.keys()):
         return True

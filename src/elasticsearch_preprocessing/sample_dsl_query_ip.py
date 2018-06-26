@@ -37,7 +37,7 @@ with open('es_locations.tsv', 'w') as csvfile:
                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
     
     id_fields = ["id", "uuid"]
-    memex_fields = ["id", "content_type" "crawl_data", "crawler", "doc_type", "extracted_metadata", "extracted_text", "extractions", "raw_content", "team", "timestamp", "type", "url", "version"]
+    memex_fields = ["id", "content_type", "crawl_data", "crawler", "doc_type", "extracted_metadata", "extracted_text", "extractions", "raw_content", "team", "timestamp", "type", "url", "version"]
     
     content_fields = ["domain", "type", "url", "content", "extractions"]
     
