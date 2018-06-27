@@ -164,9 +164,9 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
 def check_extraction_for_doc(doc, quantity, extractions_field='extractions', strip_end=False):
     if quantity is None:
         return True
-    import pdb; pdb.set_trace()
-   # dict_string = doc.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
-    dict_string = doc.meta[extractions_field].replace('|','').strip('\n').strip('b').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    #import pdb; pdb.set_trace()
+    dict_string = doc.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    #dict_string = doc.meta[extractions_field].replace('|','').strip('\n').strip('b').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
     if strip_end:
         dict_string = dict_string[1:-1]
     extraction_dict = json.loads(dict_string)
