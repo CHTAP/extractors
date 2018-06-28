@@ -6,6 +6,13 @@ from requests_aws4auth import AWS4Auth
 import os
 import boto3 
 
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--extraction_field','-e',type=str,default=None)
+parser.add_argument('--index','-i',type=str,default='chtap')
+parser.add_argument('--max_docs', '-m', type=int, default=10000)
+args = parser.parse_args()
+
 def pprint_field(fld):
     if type(fld) == utils.AttrDict:
         fld = pprint.pformat(fld.to_dict())
@@ -45,52 +52,61 @@ client = Elasticsearch(
         connection_class = RequestsHttpConnection
         )
 
-#import ipdb; ipdb.set_trace()
-index = 'chtap'
+# Setting index and max docs
+index = args.index
+max_docs = args.max_docs
 
-max_docs = 1000
+# Setting extracton field to query
+extraction_field = f'content.extractions.{args.extraction_field}'
 
+# Creating query structure
+# NOTE: using should instead of must gives many more results!
 q = Q('bool',must=[
       Q("exists",field="memex.extracted_text"),
-   #   Q("exists",field="content.extractions.phone"),
-      Q("exists",field="content.extractions.location")
-      #Q("query_string",**{"default_field":"content.extractions", "query":"*location*"}),
-      #Q("nested", path="memex", query=Q("exists",field="memex.extractions"))
+      Q("exists",field=extraction_field)
       ])
 
+# Executing search
 s = Search(using=client, index="chtap").query(q)
-
-# Getting only a certain number of examples...weird way this package does this
-s = s[0:max_docs]
-
 res = s.execute()
 
 print("%d documents found" % res['hits']['total'])
 print("%d hits found" % len(res['hits']['hits']))
 
-with open('outputfile.tsv', 'w') as csvfile:   
+with open(f'output_{args.extraction_field}.tsv', 'w') as csvfile:   
     filewriter = csv.writer(csvfile, delimiter='\t',  # we use TAB delimited, to handle cases where freeform text may have a comma
                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
-    
-    memex_fields = ["id", "content_type" "crawl_data", "crawler", "doc_type", "extracted_metadata", "extracted_text", "extractions", "raw_content", "team", "timestamp", "type", "url", "version"]
-    
+
+    # Setting fields to export    
+    id_fields = ["id", "uuid"]
+    memex_fields = ["id", "content_type", "crawl_data", "crawler", \
+                    "doc_type", "extracted_metadata", "extracted_text",\
+                    "extractions", "raw_content", "team", "timestamp",\
+                     "type", "url", "version"]
     content_fields = ["domain", "type", "url", "content", "extractions"]
     
     field_names = [f'memex_{a}' for a in memex_fields]+[a for a in content_fields]
     # create column header row
     filewriter.writerow(field_names)    #change the column labels here
-    
-    for hit in res['hits']['hits']:
+   
+    for ii,hit in enumerate(s.scan()):
         row = []
+        for field in id_fields:
+            try:
+                row.append(pprint_field(hit[field]))
+            except:
+                row.append('-1')
         for field in memex_fields:
             try:
-                row.append(pprint_field(hit['_source']['memex'][field]))
+                row.append(pprint_field(hit['memex'][field]))
             except:
                 row.append('-1')
         for field in content_fields:
             try:
-                row.append(pprint_field(hit['_source']['content'][field]))
+                row.append(pprint_field(hit['content'][field]))
             except:
                 row.append('-1')
 
         filewriter.writerow(row)
+        if ii == max_docs:
+            break 
