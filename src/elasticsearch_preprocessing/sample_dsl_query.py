@@ -8,15 +8,19 @@ import boto3
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--extraction_field','-e',type=str,default=None)
+parser.add_argument('--extraction_field','-e',type=str,default='all')
 parser.add_argument('--index','-i',type=str,default='chtap')
 parser.add_argument('--max_docs', '-m', type=int, default=10000)
 args = parser.parse_args()
 
-def pprint_field(fld):
+def pprint_field(fld, str_format=True):
     if type(fld) == utils.AttrDict:
         fld = pprint.pformat(fld.to_dict())
-    return fld.encode('utf-8')
+#    import ipdb; ipdb.set_trace()
+    if str_format:
+        return fld.encode('utf-8')
+    else:
+        return fld
 
 AWS_ACCESS_KEY = os.environ["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
@@ -59,12 +63,20 @@ max_docs = args.max_docs
 # Setting extracton field to query
 extraction_field = f'content.extractions.{args.extraction_field}'
 
+#import ipdb; ipdb.set_trace()
 # Creating query structure
 # NOTE: using should instead of must gives many more results!
-q = Q('bool',must=[
+if args.extraction_field != 'all':
+    q = Q('bool',must=[
       Q("exists",field="memex.extracted_text"),
       Q("exists",field=extraction_field)
       ])
+
+else:
+    q = Q('bool',must=[
+      Q("exists",field="memex.extracted_text")
+      ])
+
 
 # Executing search
 s = Search(using=client, index="chtap").query(q)
@@ -73,7 +85,7 @@ res = s.execute()
 print("%d documents found" % res['hits']['total'])
 print("%d hits found" % len(res['hits']['hits']))
 
-with open(f'output_{args.extraction_field}.tsv', 'w') as csvfile:   
+with open(f'output_{args.extraction_field}_b.tsv', 'w') as csvfile:   
     filewriter = csv.writer(csvfile, delimiter='\t',  # we use TAB delimited, to handle cases where freeform text may have a comma
                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
 

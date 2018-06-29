@@ -139,6 +139,7 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
                 quant_ind = doc.name in gold_list
         except:
             print('Malformatted JSON Entry!')
+            #import ipdb; ipdb.set_trace()
             quant_ind = False
         if quant_ind and (len(dev_docs)<dev_set_sz )and (len(dev_docs) < len(test_docs)):
             dev_docs.add(doc)
@@ -161,12 +162,56 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
     return list(train_docs), list(dev_docs), list(test_docs), \
            list(train_sents), list(dev_sents), list(test_sents)
 
+def replace_str_index(text,index=0,replacement=''):
+    return '%s%s%s'%(text[:index],replacement,text[index+1:])
+
+def replace_middle_double_quotes(text):
+    indices = [m.start(0) for m in re.finditer(r'[a-zA-Z0-9_.!?]"[a-zA-Z0-9_.!?]', text)]
+    indices = indices + [m.start(0) for m in re.finditer(r'[a-zA-Z0-9_.!?]"\s[a-zA-Z0-9_.!?]', text)]
+    indices = indices + [m.start(0) for m in re.finditer(r'[a-zA-Z0-9_.!?]\s"[a-zA-Z0-9_.!?]', text)]
+    for ii in indices:
+        text = replace_str_index(text,ii+1,"'")
+    return text
+
+def clean_extracted_text(text):
+    
+    # Replacing and stripping special characters
+    text =text.replace('\\n','').replace('\'','"').replace('|','').strip('\n').strip('\r').strip('b').strip('"').replace('\\\"','"').replace('""','"')
+    
+    # Removing extraneous back-to-back double quotes
+    text = " ".join(text.split()).replace('" "','')
+    
+    # Removed special characters
+    #text = re.sub(r'\\x*.[a-zA-Z0-9]', '',text)
+    text = re.sub(r'\\x[a-zA-Z0-9][a-zA-Z0-9]', '',text)
+    # Removing internal double quotes
+    text = replace_middle_double_quotes(text)
+    
+    # Removing remaining escapes
+    text = re.sub(r'\\',' ',text)
+    
+    return text
+
 def check_extraction_for_doc(doc, quantity, extractions_field='extractions', strip_end=False):
     if quantity is None:
         return True
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
+    
+    dict_string = clean_extracted_text(doc.meta['extractions']) 
+    # Replacing and stripping special characters
+   # dict_string = doc.meta['extractions'].replace('\\n','').replace('\'','"').replace('|','').strip('\n').strip('\r').strip('b').strip('"').replace('\\\"','"').replace('""','"')
+    
+    # Removing extraneous back-to-back double quotes
+   # dict_string = " ".join(dict_string.split()).replace('" "','')
+    
+    # Removed special characters
+    #dict_string = re.sub(r'\\x*.[a-zA-Z0-9]', '',dict_string)
+    
+    # Removing internal double quotes
+   # dict_string = replace_middle_double_quotes(dict_string)
+
    # dict_string = doc.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
-    dict_string = doc.meta[extractions_field].replace('|','').strip('\n').strip('b').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+   # dict_string = doc.meta[extractions_field].replace('|','').strip('\n').strip('b').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
     if strip_end:
         dict_string = dict_string[1:-1]
     extraction_dict = json.loads(dict_string)
@@ -175,7 +220,8 @@ def check_extraction_for_doc(doc, quantity, extractions_field='extractions', str
     return False
 
 def get_extraction_from_candidate(can,quantity,extractions_field='extractions'):
-    dict_string = can.get_parent().document.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+  #  dict_string = can.get_parent().document.meta[extractions_field].strip('\n').strip('"').replace('""','"').replace('\\"',"\\").replace('\\','\\\\')
+    dict_string = clean_extracted_text(can.get_parent().document.meta['extractions']) 
     extraction = json.loads(dict_string)[quantity]
     return extraction
 
@@ -224,6 +270,7 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
                 target_strings = get_extraction_from_candidate(c,target,extractions_field='extractions')
             except:
                 print('Gold label not found!')
+               # import pdb; pdb.set_trace()
                 continue
         else:
             try:
