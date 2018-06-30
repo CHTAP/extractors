@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--extraction_field','-e',type=str,default='all')
 parser.add_argument('--index','-i',type=str,default='chtap')
 parser.add_argument('--max_docs', '-m', type=int, default=10000)
+parser.add_argument('--out_fields', '-of', type=str, default='full')
 args = parser.parse_args()
 
 def pprint_field(fld, str_format=True):
@@ -83,19 +84,24 @@ s = Search(using=client, index="chtap").query(q)
 res = s.execute()
 
 print("%d documents found" % res['hits']['total'])
-print("%d hits found" % len(res['hits']['hits']))
 
-with open(f'output_{args.extraction_field}_b.tsv', 'w') as csvfile:   
+with open(f'output_{args.extraction_field}.tsv', 'w') as csvfile:   
     filewriter = csv.writer(csvfile, delimiter='\t',  # we use TAB delimited, to handle cases where freeform text may have a comma
                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
     # Setting fields to export    
     id_fields = ["id", "uuid"]
-    memex_fields = ["id", "content_type", "crawl_data", "crawler", \
+    if args.out_fields == 'full':
+        memex_fields = ["id", "content_type", "crawl_data", "crawler", \
                     "doc_type", "extracted_metadata", "extracted_text",\
                     "extractions", "raw_content", "team", "timestamp",\
                      "type", "url", "version"]
-    content_fields = ["domain", "type", "url", "content", "extractions"]
+        content_fields = ["domain", "type", "url", "content", "extractions"]
+    elif args.out_fields == 'extr_text':
+        memex_fields = ["id", "extracted_text", "url"]
+        content_fields = ["domain", "type", "url", "extractions"]
+    else:
+        raise ValueError('Invalid output field arg!')
     
     field_names = [f'memex_{a}' for a in memex_fields]+[a for a in content_fields]
     # create column header row

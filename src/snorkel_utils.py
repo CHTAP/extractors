@@ -288,13 +288,17 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
                 targets = list(filter(None,re.split('[,/:\s]',target_strings.lower())))
                 
             targets_split = list(itertools.chain.from_iterable([t.split() for t in targets]))
-
+   
+           # import pdb; pdb.set_trace()
             if match_val_targets_location(val,targets) or match_val_targets_location(val,targets_split):
                 label = 1
             else:
                 label = -1
                     
-            existing_label = session.query(GoldLabel).filter(GoldLabel.key == ak).filter(GoldLabel.candidate == c).first()
+           # Originally session.query(GoldLabel).filter(GoldLabel.key == ak).filter(GoldLabel.candidate == c).first()
+           # TODO: figure out how to query on GoldLabel.key without error...
+            existing_label = session.query(GoldLabel).filter(GoldLabel.candidate == c).first()
+           # import pdb; pdb.set_trace()
             if existing_label is None:
                 session.add(GoldLabel(candidate=c, key=ak, value=label))                        
                 labels+=1
