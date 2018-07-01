@@ -306,7 +306,8 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     name=doc_name, stable_id=stable_id,
                     meta={'domain': domain,
                           'source': source,
-                          'extractions':extractions}
+                          'extractions':extractions,
+                          'url':url}
                 )
                 yield doc, doc_text
                 
