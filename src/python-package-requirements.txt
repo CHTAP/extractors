@@ -1,0 +1,6 @@
+pycountry
+us
+git+https://github.com/reach2ashish/geograpy.git
+editdistance
+geotext
+fonduer
