@@ -4,3 +4,7 @@ git+https://github.com/reach2ashish/geograpy.git
 editdistance
 geotext
 fonduer
+elasticsearch
+elasticsearch_dsl
+requests_aws4auth
+pprint

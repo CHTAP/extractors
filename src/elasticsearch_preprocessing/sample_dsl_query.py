@@ -1,10 +1,9 @@
+import os
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch_dsl import Search, Q, utils
 import csv
 import pprint
 from requests_aws4auth import AWS4Auth
-import os
-import boto3 
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -15,19 +14,24 @@ parser.add_argument('--out_fields', '-of', type=str, default='full')
 args = parser.parse_args()
 
 def pprint_field(fld, str_format=True):
+    """
+    Printing extraction field in formatted string 
+    string fld: raw text from field
+    bool str_format: encode with utf-8
+    """
     if type(fld) == utils.AttrDict:
         fld = pprint.pformat(fld.to_dict())
-#    import ipdb; ipdb.set_trace()
     if str_format:
         return fld.encode('utf-8')
     else:
         return fld
 
+# Getting environment 
 AWS_ACCESS_KEY = os.environ["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 region = 'us-east-1' # For example, us-east-1
 service = 'es'
-host = "search-chtap-4-6fit6undgq3aw2r3k6yxcibyjy.us-east-1.es.amazonaws.com"
+host = os.environ["AWS_HOST"]
 
 if len(AWS_ACCESS_KEY) == 0:
     print("Error: Environment variable for AWS_ACCESS_KEY not set.")
@@ -39,7 +43,10 @@ if len(host) == 0:
     print("Error: Environment variable for AWS_ES_HOST not set.")
     sys.exit()
 
+# Creating authorization object
 awsauth = AWS4Auth(AWS_ACCESS_KEY, AWS_SECRET_KEY, region, service)
+
+# Creating Elasticsearch client
 
 # Use this for IP permissions
 #client = Elasticsearch(host, timeout=600)
@@ -64,7 +71,6 @@ max_docs = args.max_docs
 # Setting extracton field to query
 extraction_field = f'content.extractions.{args.extraction_field}'
 
-#import ipdb; ipdb.set_trace()
 # Creating query structure
 # NOTE: using should instead of must gives many more results!
 if args.extraction_field != 'all':
@@ -72,7 +78,6 @@ if args.extraction_field != 'all':
       Q("exists",field="memex.extracted_text"),
       Q("exists",field=extraction_field)
       ])
-
 else:
     q = Q('bool',must=[
       Q("exists",field="memex.extracted_text")
@@ -85,6 +90,7 @@ res = s.execute()
 
 print("%d documents found" % res['hits']['total'])
 
+# Writing results to file
 with open(f'output_{args.extraction_field}.tsv', 'w') as csvfile:   
     filewriter = csv.writer(csvfile, delimiter='\t',  # we use TAB delimited, to handle cases where freeform text may have a comma
                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
