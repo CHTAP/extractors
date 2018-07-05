@@ -1,3 +1,4 @@
+from snorkel.matchers import RegexMatchEach
 import os
 import codecs
 import json
@@ -232,6 +233,19 @@ def get_candidate_stable_id(can):
 ######################################################################################################
 
 # MOST OF THESE CLASSES ARE DIFFS OFF OF EXISTING SNORKEL PREPROCESSORS
+
+class LocationMatcher(RegexMatchEach):
+    """
+    Matches Spans that are the names of locations, as identified by spaCy.
+    A convenience class for setting up a RegexMatchEach to match spans
+    for which each token was tagged as a location.
+    """
+
+    def __init__(self, *children, **kwargs):
+        
+        kwargs['attrib'] = 'ner_tags'
+        kwargs['rgx'] = 'GPE|LOC'
+        super(LocationMatcher, self).__init__(*children, **kwargs)
 
 class HTMLListPreprocessor(HTMLDocPreprocessor):
     """
