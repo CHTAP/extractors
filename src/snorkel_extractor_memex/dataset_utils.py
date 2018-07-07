@@ -146,11 +146,10 @@ def replace_middle_double_quotes(text):
     
     string text: string to modify
     """
-    indices = [m.start(0) for m in re.finditer(r'[a-zA-Z0-9_.!?]"[a-zA-Z0-9_.!?]', text)]
-    indices = indices + [m.start(0) for m in re.finditer(r'[a-zA-Z0-9_.!?]"\s[a-zA-Z0-9_.!?]', text)]
-    indices = indices + [m.start(0) for m in re.finditer(r'[a-zA-Z0-9_.!?]\s"[a-zA-Z0-9_.!?]', text)]
+    indices = [m.start(0) for m in re.finditer(r'[^:,][^{]"[^:,}]', text)]
     for ii in indices:
-        text = replace_str_index(text,ii+1,"'")
+        text = replace_str_index(text,ii+2,"'")    
+        
     return text
 
 def clean_extracted_text(text):
@@ -197,7 +196,7 @@ def check_extraction_for_doc(doc, quantity, extractions_field='extractions', str
         
     # String-to-dict
     extraction_dict = json.loads(dict_string)
-    
+        
     # Check if quantity is in extractions field
     if quantity in list(extraction_dict.keys()):
         return True
