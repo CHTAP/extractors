@@ -297,7 +297,7 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     print('Malformatted Line!')
                     continue
                 doc_text = content
-                doc_name = memex_id
+                doc_name = doc_id
                 source = content_type
                 extractions = extractions
                 # Short documents are usually parsing errors...
