@@ -2,6 +2,8 @@ from collections import defaultdict
 import re
 from fonduer.lf_helpers import get_left_ngrams, get_right_ngrams, get_between_ngrams
 from snorkel.lf_helpers import get_tagged_text
+import geograpy
+import geocode
 
 
 ######################################################################################################
@@ -33,7 +35,7 @@ def overlap(a, b):
 ##### HELPER FUNCTIONS FOR EXTRACTIONS
 ######################################################################################################
 
-def create_extractions_dict(session, cands, train_marginals, extractions, dummy=False):
+def create_extractions_dict(session, cands, train_marginals, extractions, dummy=False, geocode=false):
     """
     Creating dictionary of extractions from label matrix and marginals.
     
@@ -69,7 +71,12 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
         if train_cand_preds[ind] == 1:
             for extraction in extractions:
                 ext = getattr(cand,extraction).get_span().lower()
-                doc_extractions[doc_name][extraction].append(ext)
+                if ext not in doc_extractions[doc_name][extraction]:
+                    doc_extractions[doc_name][extraction].append(ext)
+                    if extraction == 'location' and geocode and geograpy.get_place_context(text=ext).cities:
+                        q0, latlng = geocode.get_geocode(ext)
+                        loc = "Lat: " + str(latlng[0]) + ", Lng: " + str(latlng[1])
+                        doc_extractions[doc_name][extraction].append(loc)
         if dummy:
             doc_extractions[doc_name]['dummy'].append('dummy_ext')
         
