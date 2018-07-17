@@ -166,8 +166,10 @@ def replace_middle_double_quotes(text):
     string text: string to modify
     """
 
+    #Strips double quotes that don't start or end strings that will make up keys or values
     indices = [m.start(0) for m in re.finditer(r'[^:,][^{]"[^:,}]', text)]
     for ii in indices:
+        #+2 because the regex above will catch two characters before the double quote
         text = replace_str_index(text,ii+2,"'")    
         
     return text
