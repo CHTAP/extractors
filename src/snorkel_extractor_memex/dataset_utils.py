@@ -5,6 +5,7 @@ import json
 from bs4 import BeautifulSoup
 import itertools
 import numpy as np
+import csv
 
 import random
 import numpy as np
@@ -15,11 +16,12 @@ import gzip
 import pycountry
 import us
 import editdistance
+import geograpy
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
 from snorkel.utils import ProgressBar
-    
+
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR GOLD LABELING
 ######################################################################################################
@@ -117,6 +119,23 @@ def match_val_targets_location(val,targets):
 ######################################################################################################
 ##### HELPER FUNCTIONS
 ######################################################################################################
+def clean_url(text):
+    text = text.replace('https', '').replace('http', '').replace(':', ' ').replace('/', ' ').replace('.', ' ')
+    text = text.replace('backpage', '').replace('com', '').replace('online', '')
+    text = text.replace('  ', ' ').replace('  ', ' ')
+    text = text.title().split()
+                
+    url_locs = ""
+    for word in text:
+        places = geograpy.get_place_context(text=word)
+        if places.cities:
+            url_locs += " The city of " + str(places.cities[0]) + " (url)."
+        if places.regions:
+            url_locs += " The region of " + str(places.regions[0]) + " (url)."
+        if places.other:
+            url_locs += " The location of " + str(places.other[0]) + " (url)."
+     
+    return url_locs
 
 def retrieve_all_files(dr):
     """
@@ -146,6 +165,7 @@ def replace_middle_double_quotes(text):
     
     string text: string to modify
     """
+
     indices = [m.start(0) for m in re.finditer(r'[^:,][^{]"[^:,}]', text)]
     for ii in indices:
         text = replace_str_index(text,ii+2,"'")    
@@ -160,7 +180,9 @@ def clean_extracted_text(text):
     """
     
     # Replacing and stripping special characters
-    text =text.replace('\\n','').replace('\'','"').replace('|','').strip('\n').strip('\r').strip('b').strip('"').replace('\\\"','"').replace('""','"')
+    text = text.replace('\\n','').replace('\'','"').replace('|','').replace('\\\"','"').replace('""','"')
+    text = text.strip('b').strip('"').strip('\n').strip('\r')
+    text = text[:-1]
     
     # Removing extraneous back-to-back double quotes
     text = " ".join(text.split()).replace('" "','')
@@ -169,7 +191,7 @@ def clean_extracted_text(text):
     text = re.sub(r'\\x[a-zA-Z0-9][a-zA-Z0-9]', '',text)
     # Removing internal double quotes
     text = replace_middle_double_quotes(text)
-    
+    text = replace_middle_double_quotes(text)
     # Removing remaining escapes
     text = re.sub(r'\\',' ',text)
     
@@ -186,17 +208,16 @@ def check_extraction_for_doc(doc, quantity, extractions_field='extractions', str
     """
     if quantity is None:
         return True
-    
     # Getting cleaned text
     dict_string = clean_extracted_text(doc.meta['extractions']) 
-    
+
     # Stripping start/end chars
     if strip_end:
         dict_string = dict_string[1:-1]
         
     # String-to-dict
     extraction_dict = json.loads(dict_string)
-        
+
     # Check if quantity is in extractions field
     if quantity in list(extraction_dict.keys()):
         return True
@@ -210,7 +231,6 @@ def get_extraction_from_candidate(can,quantity,extractions_field='extractions'):
     string quantity: extraction quantity to retrieve
     string extractions_field: field where extractions dictionary is stored
     """
-    
     # Getting cleaned string describing extractions fileld
     dict_string = clean_extracted_text(can.get_parent().document.meta['extractions']) 
     
@@ -278,10 +298,12 @@ class HTMLListPreprocessor(HTMLDocPreprocessor):
 class ESTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file drawn from Elasticsearch"""
     
-    def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False):
+    def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
+                 content_field=['extracted_text']):
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         self.verbose = verbose
         self.clean_docs = clean_docs
+        self.content_field=content_field
 
     def parse_file(self, fp, file_name):
         with codecs.open(fp, encoding=self.encoding) as tsv:
@@ -295,7 +317,13 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                 except:
                     print('Malformatted Line!')
                     continue
-                doc_text = content
+                
+                doc_text = ""
+                if 'extracted_text' in self.content_field:
+                    doc_text += content
+                if 'url' in self.content_field:
+                    doc_text = doc_text[:-2] + clean_url(url) + "\"\'"
+
                 doc_name = doc_id
                 source = content_type
                 extractions = extractions
@@ -310,11 +338,11 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                 
                 # Cleaning documents if specified
                 if self.clean_docs:
-                    doc_text = doc_text.replace('\n',' ').replace('\t',' ').replace('<br>', ' ')
+                    doc_text = doc_text.replace('\n',' ').replace('\t',' ').replace('<br>', ' ').replace('\\\\n', ' ')
                     # Eliminating extra space
                     doc_text = " ".join(doc_text.split())
-                
-                # Yielding reults, adding useful info to metadata
+
+                # Yielding results, adding useful info to metadata
                 doc = Document(
                     name=doc_name, stable_id=stable_id,
                     meta={'domain': domain,
@@ -461,8 +489,21 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
 ######################################################################################################
 ##### EXPOSED FUNCTIONS
 ######################################################################################################
+def combine_dedupe(dev_loc, added_train_docs, out_loc):
+    with open(dev_loc, 'r') as dev_file, open(added_train_docs, 'r') as train_file, open(out_loc, 'w') as outfile:
+        dev_reader = csv.reader(dev_file, delimiter='\t')
+        devs = list(dev_reader)
+        train_reader = csv.reader(train_file, delimiter='\t')
+        writer = csv.writer(outfile, delimiter='\t')
 
-def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs=True,content_field='extracted_text'): 
+        for line in train_reader:
+            if line not in devs:
+                writer.writerow(line)
+    
+        for line in devs:
+            writer.writerow(line)
+    
+def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs=True,content_field=['extracted_text']): 
     """
     Sets a chosen document preprocessor.
     
@@ -494,7 +535,8 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
         path=data_loc,
         max_docs=max_docs,
         verbose=verbose,
-        clean_docs=clean_docs
+        clean_docs=clean_docs,
+        content_field=content_field
     )
 
     # For MEMEX jsons -- loading from .jsonl.gz
