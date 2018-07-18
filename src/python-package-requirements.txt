@@ -8,3 +8,4 @@ elasticsearch
 elasticsearch_dsl
 requests_aws4auth
 pprint
+googlemaps
