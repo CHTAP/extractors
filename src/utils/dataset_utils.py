@@ -702,6 +702,98 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
                 #    print('Failed to parse document!')
         else:
             print('File with no raw content!')
+            
+            
+            
+class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
+    
+    def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, 
+                 clean_docs=False, content_field=['raw_content'], ):
+        #self.encoding = encoding
+        #self.max_docs = max_docs
+        self.path = path
+        self.clean_docs = clean_docs
+        self.verbose=verbose
+        self.content_field = content_field
+        super().__init__(path, encoding=encoding, max_docs=max_docs)
+        
+    def _get_files(self,path_list):
+        fpaths = [fl for fl in path_list]
+        return fpaths
+    
+    def _can_read(self, fpath):
+        return fpath.endswith('tsv')
+    
+    def generate(self):
+        """
+        Parses a file or directory of files into a set of Document objects.
+        """
+        doc_count = 0
+        file_list = os.listdir(self.path)
+        for file_name in self._get_files(self.file_list):
+            if self._can_read(file_name):
+                for doc, text in self.parse_file(file_name):
+                    yield doc, text
+                    doc_count += 1
+                    if self.verbose:
+                        print(f'Parsed {doc_count} docs...')
+                    if doc_count >= self.max_docs:
+                        return
+
+    def parse_file(self, fp):
+        with codecs.open(fp, encoding=self.encoding) as tsv:
+            for ind, line in enumerate(tsv):
+                if ind == 0:
+                    continue
+                try:
+                    # Loading data -- ignore malformatted entries!
+                    # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
+                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                except:
+                    print('Malformatted Line!')
+                    continue
+                
+                doc_text = ""
+                if 'extracted_text' in self.content_field:
+                    doc_text += content
+                if 'memex_raw_content' in self.content_field:
+                    doc_text = doc_text[:-2] + clean_html(memex_raw_content) + "\"\'"
+                if 'url' in self.content_field:
+                    doc_text = doc_text[:-2] + clean_url(url) + "\"\'"
+                if 'memex_url' in self.content_field:
+                    doc_text = doc_text[:-2] + clean_url(memex_url) + "\"\'"
+
+                doc_name = doc_id
+                source = content_type
+                extractions = extractions
+                # Short documents are usually parsing errors...
+                if len(doc_text) < 10:
+                    if self.verbose:
+                        print('Short Doc!')
+                    continue
+                
+                # Shortening extremely long documents
+                if len(doc_text) > 2000:
+                    doc_text = doc_text[-2000:]
+                    
+                # Setting stable id
+                stable_id = self.get_stable_id(doc_name)
+                
+                # Cleaning documents if specified
+                if self.clean_docs:
+                    doc_text = doc_text.replace('\n',' ').replace('\t',' ').replace('<br>', ' ').replace('\\\\n', ' ')
+                    # Eliminating extra space
+                    doc_text = " ".join(doc_text.split())
+
+                # Yielding results, adding useful info to metadata
+                doc = Document(
+                    name=doc_name, stable_id=stable_id,
+                    meta={'domain': domain,
+                          'source': source,
+                          'extractions':extractions,
+                          'url':url}
+                )
+                yield doc, doc_text
 
 ######################################################################################################
 ##### EXPOSED FUNCTIONS
@@ -760,14 +852,25 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
     elif data_source == 'es':
     
         # Initializing document preprocessor
-        # TODO: update to take content_field argument
-        doc_preprocessor = ESTSVDocPreprocessor(
-        path=data_loc,
-        max_docs=max_docs,
-        verbose=verbose,
-        clean_docs=clean_docs,
-        content_field=content_field
-    )
+        
+        if '.tsv' in data_loc:
+            print('Using single-threaded loader')
+            doc_preprocessor = ESTSVDocPreprocessor(
+            path=data_loc,
+            max_docs=max_docs,
+            verbose=verbose,
+            clean_docs=clean_docs,
+            content_field=content_field
+        )
+        else:
+            print('Using parallelized loader')
+            doc_preprocessor = ParallelESTSVPreprocessor(
+            path=data_loc,
+            max_docs=max_docs,
+            verbose=verbose,
+            clean_docs=clean_docs,
+            content_field=content_field
+        )         
 
     # For MEMEX jsons -- loading from .jsonl.gz
     elif data_source == 'memex_jsons':
