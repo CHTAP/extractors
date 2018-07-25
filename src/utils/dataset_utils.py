@@ -730,7 +730,8 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         """
         doc_count = 0
         file_list = os.listdir(self.path)
-        for file_name in self._get_files(self.file_list):
+        file_list = [os.path.join(self.path, fl) for fl in file_list]
+        for file_name in self._get_files(file_list):
             if self._can_read(file_name):
                 for doc, text in self.parse_file(file_name):
                     yield doc, text
