@@ -1,5 +1,6 @@
 from snorkel.matchers import RegexMatchEach
 import os
+import sys
 import codecs
 import json
 from bs4 import BeautifulSoup
@@ -16,7 +17,10 @@ import gzip
 import pycountry
 import us
 import editdistance
+
+import geotext
 import geograpy
+import geotext_mod.geotext_mod
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
@@ -62,7 +66,7 @@ def lookup_country_alpha2(cn):
         out = 'no country'
     return out
 
-def lookup_state_name(cn):
+def lookup_state_name(val):
     """
     Check if string is a state by direct lookup
     
@@ -74,7 +78,7 @@ def lookup_state_name(cn):
         out = 'no state'
     return out
 
-def lookup_state_abbr(cn):
+def lookup_state_abbr(val):
     """
     Check if string is a state abbreviation by direct lookup
     
@@ -119,23 +123,133 @@ def match_val_targets_location(val,targets):
 ######################################################################################################
 ##### HELPER FUNCTIONS
 ######################################################################################################
-def clean_url(text):
-    text = text.replace('https', '').replace('http', '').replace(':', ' ').replace('/', ' ').replace('.', ' ')
-    text = text.replace('backpage', '').replace('com', '').replace('online', '')
-    text = text.replace('  ', ' ').replace('  ', ' ')
-    text = text.title().split()
-                
-    url_locs = ""
-    for word in text:
-        places = geograpy.get_place_context(text=word)
-        if places.cities:
-            url_locs += " The city of " + str(places.cities[0]) + " (url)."
-        if places.regions:
-            url_locs += " The region of " + str(places.regions[0]) + " (url)."
-        if places.other:
-            url_locs += " The location of " + str(places.other[0]) + " (url)."
-     
-    return url_locs
+def fast_loc(span_input):
+    span = span_input.get_span()
+    reg = re.compile(r'[^a-zA-Z ]')
+
+    if len(span) < 4 or reg.search(span):
+        return False
+
+    geo = geotext_mod.GeoText(span)
+
+    city = span.title() in geo.cities
+    state = span.title() in lookup_state_name(span)
+    country = span.title() in geo.countries
+
+    return city or state or country
+
+def fix_spacing(text):
+    """
+    Removes double spaces and spaces at the beginning and end of line
+    
+    string text: text to fix spacing on
+    """    
+    
+    while '  ' in text:
+        text = text.replace('  ',' ')
+    text = text.strip()
+    
+    return text
+    
+def parse_url(text):
+    """
+    Finds location mentions in url and labels them.
+    
+    string text: string of url
+    """
+    
+    text = clean_input(text)
+    
+    # Create spacing
+    text = text.replace('https', '').replace('http', '').replace('com', '')
+    text = text.replace(':', ' ').replace('/', ' ').replace('\\', ' ').replace('.', ' ').replace('-', ' ')
+    
+    # URL_S marks start of word in URL, URL_E marks the end
+    url = 'Url ' + text.title() + '. '
+    
+    url = fix_spacing(url)
+    
+    return url
+
+def clean_input(text):
+    """
+    Removes quotes, html tags, etc
+    
+    string text: string to modify
+    """
+    
+    # Strip special characters
+    text = (''.join(c for c in text if ord(c) > 31 and ord(c) < 127)).encode('ascii', 'ignore').decode()
+    
+    # String literal "\n" and other such characters are in the text strings
+    text = text.replace('b\'', '')
+    text = text.replace('\\\'','').replace('\'','').replace('\\\"','').replace('\"','')
+    text = text.replace('\\n',' ').replace('\\r',' ').replace('\\t',' ').replace('\\\\\\','')
+    
+    # Strip html tags
+    text = re.sub(r'<.*?>', ' ', text)
+    # Strip html symbols
+    text = re.sub('&.{,6}?;', ' ', text)
+    # Strip ascii interpretation of special characters
+    text = re.sub(r'\\x[a-zA-Z0-9][a-zA-Z0-9]',' ', text)
+
+    text = fix_spacing(text)
+                      
+    return text
+
+def get_posting_html(text, term):
+    """
+    Returns ad posting from html document in memex_raw_data
+    
+    string text: memex_raw_data string
+    term: regex of term to find
+    """
+
+    term_reg = re.compile(term)
+    html = BeautifulSoup(text, 'lxml')
+    title = html.find('title')
+    html_lines = list(html.findAll(text=True))
+    html_text = ""
+    
+    if title and title.string:
+        clean_title = clean_input(title.string)
+    else:
+        clean_title = '-1'
+
+    # These values were deterimined experimentally
+    line_min = 30
+    spec_max = .2
+    increment = .1
+
+    for line in html_lines:
+        clean_line = clean_input(line)
+        has_term = term_reg.search(clean_line.lower())
+
+        # Lines longer than a certain length are more likely to be the substanitive part of the post
+        # term_reg gives the option to override line length if a key term is contained
+        if len(clean_line) >= line_min or has_term:
+            
+            # Creates a line with only special characters
+            spec_line = re.sub(r'[\w ]*', '', clean_line)
+
+            # Lines with a high proportion of special characters are much more likely to be non-text
+            spec_clean_ratio = len(spec_line)/len(clean_line)
+        
+            # {} are much more likely to be in a non-text line
+            if '{' in spec_line or '}' in spec_line:
+                spec_clean_ratio += increment
+
+            # OBJ_S marks the start of the term, OBJ_E marks the end
+            if spec_clean_ratio < spec_max and clean_title and clean_line == clean_title:
+                html_text += ' Title ' + clean_line.replace('.', ' ').replace(':', ' ') + '. '
+            elif spec_clean_ratio < spec_max and has_term:
+                html_text += ' Search ' + clean_line.replace('.', ' ').replace(':', ' ') + '. '
+            elif spec_clean_ratio < spec_max:
+                html_text += ' ' + clean_line + ' '
+
+    html_text = fix_spacing(html_text)
+    
+    return html_text
 
 def retrieve_all_files(dr):
     """
@@ -166,11 +280,13 @@ def replace_middle_double_quotes(text):
     string text: string to modify
     """
 
-    #Strips double quotes that don't start or end strings that will make up keys or values
-    indices = [m.start(0) for m in re.finditer(r'[^:,][^{]"[^:,}]', text)]
-    for ii in indices:
-        #+2 because the regex above will catch two characters before the double quote
-        text = replace_str_index(text,ii+2,"'")    
+    # Run twice for cases of regex overlap
+    for iteration in range(2):
+        #Strips double quotes that don't start or end strings that will make up keys or values
+        indices = [m.start(0) for m in re.finditer(r'[^:,][^{]"[^:,}]', text)]
+        for ii in indices:
+            #+2 because the regex above will catch two characters before the double quote
+            text = replace_str_index(text,ii+2,"'")    
         
     return text
 
@@ -182,10 +298,8 @@ def clean_extracted_text(text):
     """
     
     # Replacing and stripping special characters
-    text = text.replace('\\n','').replace('\'','"').replace('|','').replace('\\\"','"').replace('""','"')
-    text = text.strip('b').strip('"').strip('\n').strip('\r')
-    text = text[:-1]
-    
+    text = text.replace('\\n','').replace('\'','"').replace('|','').strip('\n').strip('\r').strip('b').strip('"').replace('\\\"','"').replace('""','"')
+
     # Removing extraneous back-to-back double quotes
     text = " ".join(text.split()).replace('" "','')
     
@@ -193,7 +307,7 @@ def clean_extracted_text(text):
     text = re.sub(r'\\x[a-zA-Z0-9][a-zA-Z0-9]', '',text)
     # Removing internal double quotes
     text = replace_middle_double_quotes(text)
-    text = replace_middle_double_quotes(text)
+    
     # Removing remaining escapes
     text = re.sub(r'\\',' ',text)
     
@@ -216,7 +330,7 @@ def check_extraction_for_doc(doc, quantity, extractions_field='extractions', str
     # Stripping start/end chars
     if strip_end:
         dict_string = dict_string[1:-1]
-        
+
     # String-to-dict
     extraction_dict = json.loads(dict_string)
 
@@ -301,12 +415,14 @@ class ESTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file drawn from Elasticsearch"""
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_field=['extracted_text']):
+                 content_fields=['extracted_text'], term='', max_doc_length=0):
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         self.verbose = verbose
         self.clean_docs = clean_docs
-        self.content_field=content_field
-
+        self.content_fields=content_fields
+        self.term=term
+        self.max_doc_length=max_doc_length
+        
     def parse_file(self, fp, file_name):
         with codecs.open(fp, encoding=self.encoding) as tsv:
             for ind, line in enumerate(tsv):
@@ -319,31 +435,38 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                 except:
                     print('Malformatted Line!')
                     continue
-                
-                doc_text = ""
-                if 'extracted_text' in self.content_field:
-                    doc_text += content
-                if 'url' in self.content_field:
-                    doc_text = doc_text[:-2] + clean_url(url) + "\"\'"
 
+                # Cleaning documents if specified
+                if self.clean_docs:
+                    content = clean_input(content)
+                    memex_raw_content = get_posting_html(memex_raw_content, self.term)
+                    memex_url = parse_url(memex_url)
+
+                doc_text = ""
+                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
+                for field in self.content_fields:
+                    doc_text += field_names[field] + " "
+
+                doc_text = doc_text.strip()
                 doc_name = doc_id
                 source = content_type
                 extractions = extractions
+                
                 # Short documents are usually parsing errors...
                 if len(doc_text) < 10:
                     if self.verbose:
                         print('Short Doc!')
                     continue
-                    
+       
+                # long documents sometimes causing parsing to stall
+                if self.max_doc_length and len(doc_text) > self.max_doc_length:
+                    if self.verbose:
+                        print('Long document')
+                    doc_text = doc_text[:self.max_doc_length - len(memex_url)] + ". " + memex_url
+ 
                 # Setting stable id
                 stable_id = self.get_stable_id(doc_name)
                 
-                # Cleaning documents if specified
-                if self.clean_docs:
-                    doc_text = doc_text.replace('\n',' ').replace('\t',' ').replace('<br>', ' ').replace('\\\\n', ' ')
-                    # Eliminating extra space
-                    doc_text = " ".join(doc_text.split())
-
                 # Yielding results, adding useful info to metadata
                 doc = Document(
                     name=doc_name, stable_id=stable_id,
@@ -492,20 +615,34 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
 ##### EXPOSED FUNCTIONS
 ######################################################################################################
 def combine_dedupe(dev_loc, added_train_docs, out_loc):
+    """
+    Creates new tsv file by combining dev_loc and added_train_docs without duplicates.
+    
+    string dev_loc: path to data source -- .tsv file
+    string added_train_docs: path to data source -- .tsv file
+    string out_loc: path to output file -- .tsv file
+    """
+    
+    csv.field_size_limit(sys.maxsize)
+
     with open(dev_loc, 'r') as dev_file, open(added_train_docs, 'r') as train_file, open(out_loc, 'w') as outfile:
         dev_reader = csv.reader(dev_file, delimiter='\t')
         devs = list(dev_reader)
         train_reader = csv.reader(train_file, delimiter='\t')
         writer = csv.writer(outfile, delimiter='\t')
-
-        for line in train_reader:
-            if line not in devs:
-                writer.writerow(line)
-    
+        
         for line in devs:
             writer.writerow(line)
+
+        for train_line in train_reader:
+            for dev_line in devs:
+                if line[0] != dev_line[0]:
+                    writer.writerow(line)
     
-def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs=True,content_field=['extracted_text']): 
+    return out_loc
+    
+def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs=True,content_fields=['extracted_text'],
+                     term='', max_doc_length=0):
     """
     Sets a chosen document preprocessor.
     
@@ -513,7 +650,7 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
     string data_loc: path to data source -- file for .tsv sources, directory for jsons 
     bool verbose: print more info
     bool clean_docs: clean extra characters/formatting in loaded documents
-    string content_field: field to use as document
+    list of strings content_field: fields to use as document
     """
     
     # For content.tsv
@@ -538,7 +675,9 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
         max_docs=max_docs,
         verbose=verbose,
         clean_docs=clean_docs,
-        content_field=content_field
+        content_fields=content_fields,
+        term=term,
+        max_doc_length=max_doc_length
     )
 
     # For MEMEX jsons -- loading from .jsonl.gz
