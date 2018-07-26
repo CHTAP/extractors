@@ -4,7 +4,7 @@ from fonduer.lf_helpers import get_left_ngrams, get_right_ngrams, get_between_ng
 from snorkel.lf_helpers import get_tagged_text
 import geograpy
 import googlemaps as gm
-
+from dataset_utils import city_index
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR LABELING FUNCTIONS
@@ -34,7 +34,7 @@ def overlap(a, b):
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR EXTRACTIONS
 ######################################################################################################
-def loc_extraction(text, geocode_key=None):
+def loc_extraction(text, cities, geocode_key=None):
     """
     If text is a city, returns formatted address and geocode, else returns text
 
@@ -42,7 +42,7 @@ def loc_extraction(text, geocode_key=None):
     string geocode_key: Googlemaps api key
     """
 
-    city = geograpy.get_place_context(text=text.title()).cities
+    city = cities.cities[text.lower()]
     
     if geocode_key and city:
         gms = gm.Client(key=geocode_key)
@@ -52,7 +52,7 @@ def loc_extraction(text, geocode_key=None):
         lng = qo[0]['geometry']['location']['lng']
         ext = address + ". Lat: " + str(lat) + ", Lng: " + str(lng)
     else:
-        ext = text.title()
+        ext = city
         
     return ext
 
@@ -71,6 +71,9 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
     doc_extractions = {}
     num_train_cands = max(train_marginals.shape)
     train_cand_preds = (train_marginals>0.5)*2-1
+    
+    cities = city_index('../utils/data/cities15000.txt')
+    
     for ind in range(num_train_cands):
         if type(cands) == list:
             cand = cands[ind]
@@ -94,7 +97,7 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
             for extraction in extractions:
                 ext = getattr(cand,extraction).get_span().lower()
                 if extraction == 'location':
-                    ext = loc_extraction(ext, geocode_key)
+                    ext = loc_extraction(ext, cities, geocode_key)
                 if ext not in doc_extractions[doc_name][extraction]:
                     doc_extractions[doc_name][extraction].append(ext)
         if dummy:
