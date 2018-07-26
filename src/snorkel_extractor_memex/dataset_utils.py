@@ -130,9 +130,10 @@ def fast_loc(span_input):
     if len(span) < 4 or reg.search(span):
         return False
 
-    geo = geotext_mod.GeoText(span)
+    geo = geotext.GeoText(span)
+    geo_mod = geotext_mod.GeoText(span)
 
-    city = span.title() in geo.cities
+    city = span.title() in geo_mod.cities
     state = span.title() in lookup_state_name(span)
     country = span.title() in geo.countries
 
