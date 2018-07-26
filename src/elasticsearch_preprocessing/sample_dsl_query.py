@@ -11,6 +11,7 @@ parser.add_argument('--extraction_field','-e',type=str,default='all')
 parser.add_argument('--index','-i',type=str,default='chtap')
 parser.add_argument('--max_docs', '-m', type=int, default=10000)
 parser.add_argument('--out_fields', '-of', type=str, default='full')
+parser.add_argument('--terms', '-t', type=str, default='')
 args = parser.parse_args()
 
 def pprint_field(fld, str_format=True):
@@ -70,6 +71,7 @@ max_docs = args.max_docs
 
 # Setting extracton field to query
 extraction_field = f'content.extractions.{args.extraction_field}'
+terms = args.terms
 
 # Creating query structure
 # NOTE: using should instead of must gives many more results!
@@ -78,10 +80,16 @@ if args.extraction_field != 'all':
       Q("exists",field="memex.extracted_text"),
       Q("exists",field=extraction_field)
       ])
+elif args.terms:
+    q = Q('bool',must=[
+      Q("exists",field="memex.extracted_text"),
+      Q("match",memex__extracted_text=terms)
+      ])
 else:
     q = Q('bool',must=[
       Q("exists",field="memex.extracted_text")
       ])
+
 
 
 # Executing search
