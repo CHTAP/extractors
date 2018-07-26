@@ -1,10 +1,10 @@
 from collections import defaultdict
 import re
-from fonduer.lf_helpers import get_left_ngrams, get_right_ngrams, get_between_ngrams
 from snorkel.lf_helpers import get_tagged_text
 import geograpy
 import googlemaps as gm
 from dataset_utils import city_index
+from operator import itemgetter
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR LABELING FUNCTIONS
@@ -42,7 +42,11 @@ def loc_extraction(text, cities, geocode_key=None):
     string geocode_key: Googlemaps api key
     """
 
-    city = cities.cities[text.lower()]
+    cities = list(cities.cities[text.lower()])
+    if cities:
+        city = sorted(cities, key=itemgetter(3))[-1]
+    else:
+        city = ''
     
     if geocode_key and city:
         gms = gm.Client(key=geocode_key)
@@ -50,10 +54,10 @@ def loc_extraction(text, cities, geocode_key=None):
         address = qo[0]['formatted_address']
         lat = qo[0]['geometry']['location']['lat']
         lng = qo[0]['geometry']['location']['lng']
-        ext = address + ". Lat: " + str(lat) + ", Lng: " + str(lng)
+        ext = (address, lat, lng)
     else:
         ext = city
-        
+
     return ext
 
 def create_extractions_dict(session, cands, train_marginals, extractions, dummy=False, geocode_key=None):
