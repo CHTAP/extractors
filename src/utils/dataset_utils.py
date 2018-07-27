@@ -735,7 +735,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 for doc, text in self.parse_file(file_name):
                     yield doc, text
                     doc_count += 1
-                    if self.verbose:
+                    if self.verbose and (doc_count % 1000 == 0):
                         print(f'Parsed {doc_count} docs...')
                     if doc_count >= self.max_docs:
                         return
@@ -779,7 +779,8 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 # long documents sometimes causing parsing to stall
                 if self.max_doc_length and len(doc_text) > self.max_doc_length:
                     if self.verbose:
-                        print('Long document')
+                        0
+                        #print('Long document')
                     continue
 #                    doc_text = doc_text[-self.max_doc_length:]
                 
@@ -862,7 +863,7 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
                 for doc, text in self.parse_file(file_name):
                     yield doc, text
                     doc_count += 1
-                    if self.verbose:
+                    if self.verbose and (doc_count % 1000 == 0):
                         print(f'Parsed {doc_count} docs...')
                     if doc_count >= self.max_docs:
                         return
@@ -1100,7 +1101,7 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
                 # Otherwise, use gold_dict
                 quant_ind = doc.name in gold_list
         except:
-            print('Malformatted JSON Entry!')
+            #print('Malformatted JSON Entry!')
             quant_ind = False
         if quant_ind and (len(dev_docs)<dev_set_sz )and (len(dev_docs) < len(test_docs)):
             dev_docs.add(doc)

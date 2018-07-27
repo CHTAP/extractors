@@ -42,7 +42,7 @@ def loc_extraction(text, cities, geocode_key=None):
     string geocode_key: Googlemaps api key
     """
 
-    city = cities.cities[text.lower()]
+    city = list(cities.cities[text.lower()])
     
     if geocode_key and city:
         gms = gm.Client(key=geocode_key)
@@ -54,6 +54,7 @@ def loc_extraction(text, cities, geocode_key=None):
     else:
         ext = city
         
+    ext = [f'Extracted String: {text}']+list(ext)
     return ext
 
 def create_extractions_dict(session, cands, train_marginals, extractions, dummy=False, geocode_key=None):
