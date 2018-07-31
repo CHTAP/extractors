@@ -5,6 +5,7 @@ import geograpy
 import googlemaps as gm
 from dataset_utils import city_index
 from operator import itemgetter
+from nltk.corpus import words
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR LABELING FUNCTIONS
@@ -86,7 +87,7 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
         parent = cand.get_parent()
         url = parent.document.meta['url']
         doc_name = parent.document.name
-   
+
         # Initializing key if it doesn't exist
         if doc_name not in doc_extractions.keys():
             doc_extractions[doc_name] = {}
@@ -101,9 +102,17 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
             for extraction in extractions:
                 ext = getattr(cand,extraction).get_span().lower()
                 if extraction == 'location':
-                    ext = loc_extraction(ext, cities, geocode_key)
-                if ext not in doc_extractions[doc_name][extraction]:
+                    geocode = loc_extraction(ext, cities, geocode_key)
+                    confidence = 1 if ext in url else 0
+                    if ext in words.words():
+                         confidence -= 1
+                    if not doc_extractions[doc_name].get(extraction):
+                        doc_extractions[doc_name][extraction] = (geocode, confidence)
+                    elif doc_extractions[doc_name][extraction][1] < confidence:
+                        doc_extractions[doc_name][extraction] = (geocode, confidence)
+                elif ext not in doc_extractions[doc_name][extraction]:
                     doc_extractions[doc_name][extraction].append(ext)
+        
         if dummy:
             doc_extractions[doc_name]['dummy'].append('dummy_ext')
         

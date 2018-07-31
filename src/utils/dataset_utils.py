@@ -21,13 +21,14 @@ import editdistance
 import geotext
 import geograpy
 from collections import defaultdict
+from multiprocessing.dummy import Pool as ThreadPool
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
 from snorkel.utils import ProgressBar
 
 ######################################################################################################
-##### HELPER FUNCTIONS FOR LOCATION
+##### HELPER FUNCTIONS FOR GOLD LABELING
 ######################################################################################################
 
 def lookup_country_name(cn):
@@ -162,7 +163,7 @@ class city_index(object):
 
         span = span_input.get_span()
         reg = re.compile(r'[^a-zA-Z ]')
-
+    
         if len(span) < 4 or reg.search(span):
             return False
 
@@ -172,73 +173,17 @@ class city_index(object):
 
         return city or state or country
 
-######################################################################################################
-##### HELPER FUNCTIONS FOR PHONE
-######################################################################################################
-
-# TODO: DOCSTRINGS!!!
-
-def phone_cleaning (c):
-    """ cleaning a candidate which has punctuations or letters, example: '8.3.2.8.9.7.8.2.1.0.&nbsp;Call' or '4143058071\\\\n'"""
-    phone = re.sub("[^0-9]","", c)
-    return phone
-
-def word_to_number(span_input):
-    num_dict = {"one":"1", 'two':"2", 'three':"3",'four':"4",'five':"5",'six':"6",'seven':"7",'eight':'8','nine':"9",'ten':'10'}
+def price_match(span_input):
+        """
+        Uses regex to detect mentions of price
     
-    for nb in ['one', 'two', 'three','four','five','six','seven','eight','nine','ten']:
-        if span_input.find(nb):
-            span_input = span_input.replace(nb,num_dict[nb] ).replace(" ","")
-    return span_input
+        string text: text to test for location
+        """       
+
+        span = span_input.get_span()
+        reg = re.compile(r'([Pp]rice|[Rr]ate|[Cc]ost):? ?\$?\d\d\d?( ?([Dd]ollars?))?|(([Pp]rice|[Rr]ate|[Cc]ost):? ?)?\$?\d\d\d? ?([Dd]ollars?)?]')
         
-def count_(span_input, pattern):
-    count = 0
-    while len(span_input)>0:
-        idx = span_input.find(pattern) # returns first position of character matching pattern
-        span_input = span_input[idx+len(pattern):]
-        if idx<0:
-            break
-        else:
-            count+=1
-    return count
-       
-def PhoneNumber( number ):
-    areaCode = number[0:3 ]
-    exchange = number[3:6 ]
-    line = number[6:] 
-    return "(%s) %s-%s" % ( areaCode, exchange, line )
-
-def arrange_phone(p):
-    if len(p)==10:
-        return PhoneNumber(p)
-    if len(p)==11:
-        return PhoneNumber(p[1:])
-    if len(p) == 13:
-        return PhoneNumber(p[3:])
-    else:
-        return p
-    
-def phone_eval(phone):
-    for nb in ['one', 'two', 'three','four','five','six','seven','eight','nine','ten']:
-        if count_(phone,nb)!=0:
-            return arrange_phone(phone_cleaning(word_to_number(phone)))
-    
-    if phone.isdigit():
-        result = arrange_phone(phone)
-        return result
-    else:
-        phone = phone_cleaning(phone)
-        if phone.isdigit():
-            result = arrange_phone(phone)
-            return result
-        else:
-            #phone =[]
-            #return []
-            return phone    
-
-######################################################################################################
-##### GENERAL HELPER FUNCTIONS
-######################################################################################################    
+        return True if reg.search(span) else False
 
 def fix_spacing(text):
     """
@@ -266,7 +211,7 @@ def parse_url(text):
     text = text.replace('https', '').replace('http', '').replace('com', '')
     text = text.replace(':', ' ').replace('/', ' ').replace('\\', ' ').replace('.', ' ').replace('-', ' ')
     
-    # URL_S marks start of word in URL, URL_E marks the end
+    # This format used to mark url while encouraging Snorkel to treat the entire url as a single sentence
     url = 'Url ' + text.title() + '. '
     
     url = fix_spacing(url)
@@ -283,12 +228,6 @@ def clean_input(text):
     # Strip special characters
     text = (''.join(c for c in text if ord(c) > 31 and ord(c) < 127)).encode('ascii', 'ignore').decode()
     
-    # String literal "\n" and other such characters are in the text strings
-    text = text.replace('b\'', '')
-    text = text.replace('\\\'','').replace('\'','').replace('\\\"','').replace('\"','')
-    text = text.replace('\\n',' ').replace('\\r',' ').replace('\\t',' ').replace('\\\\\\','')
-    text = text.replace('{', ' ').replace('}', ' ').replace(';', '')
-    
     # Strip html tags
     text = re.sub(r'<.*?>', ' ', text)
     # Strip html symbols
@@ -296,9 +235,47 @@ def clean_input(text):
     # Strip ascii interpretation of special characters
     text = re.sub(r'\\x[a-zA-Z0-9][a-zA-Z0-9]',' ', text)
 
+    # String literal "\n" and other such characters are in the text strings
+    text = text.replace('b\'', '')
+    text = text.replace('\\\'','').replace('\'','').replace('\\\"','').replace('\"','')
+    text = text.replace('\\n',' ').replace('\\r',' ').replace('\\t',' ').replace('\\\\\\','')
+    text = text.replace('{', ' ').replace('}', ' ').replace(';', '')
+    
     text = fix_spacing(text)
-                      
+
     return text
+
+def get_posting_html_fast(text, search_term):
+    """
+    Returns ad posting from html document in memex_raw_data
+    
+    string text: memex_raw_data string
+    term: regex of term to find
+    """
+    title_term = r'<[Tt]itle>(.*?)<\/[Tt]itle>'
+    body_term = r'<div.{0,20}[Pp]ost.{0,20}>(.*?)<\/div>'
+    body_term2 = r'<p>(.*?)<\/p>'
+
+    title = re.search(title_term, text)
+    html_lines = [clean_input(line) for line in (re.findall(body_term, text) + re.findall(body_term2, text))]
+    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+    
+    if title and title.group(1):
+        title = clean_input(title.group(1))
+    else:
+        title = '-1'
+        
+    html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + '. '
+    for line in html_lines:
+        if line:
+            html_text += ' ' + line + ' '
+    for line in search_lines:
+        if line:
+            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + '. '
+        
+    html_text = fix_spacing(html_text)
+
+    return html_text
 
 def get_posting_html(text, term):
     """
@@ -336,7 +313,7 @@ def get_posting_html(text, term):
             spec_line = re.sub(r'[\w ]*', '', clean_line)
 
             # Lines with a high proportion of special characters are much more likely to be non-text
-            spec_clean_ratio = len(spec_line)/len(clean_line)
+            spec_clean_ratio = len(spec_line)/max(1, len(clean_line))
         
             # {} are much more likely to be in a non-text line
             if '{' in spec_line or '}' in spec_line:
@@ -472,127 +449,6 @@ def get_candidate_stable_id(can):
 
 # MOST OF THESE CLASSES ARE DIFFS OFF OF EXISTING SNORKEL PREPROCESSORS
 
-from snorkel.udf import UDF, UDFRunner
-from copy import deepcopy
-from itertools import product
-
-class CandidateExtractorUDF(UDF):
-    def __init__(self, candidate_class, cspaces, matchers, candidate_filter, self_relations, nested_relations, symmetric_relations, **kwargs):
-        self.candidate_class     = candidate_class
-        # Note: isinstance is the way to check types -- not type(x) in [...]!
-        self.candidate_spaces    = cspaces if isinstance(cspaces, (list, tuple)) else [cspaces]
-        self.matchers            = matchers if isinstance(matchers, (list, tuple)) else [matchers]
-        self.candidate_filter    = candidate_filter
-        self.nested_relations    = nested_relations
-        self.self_relations      = self_relations
-        self.symmetric_relations = symmetric_relations
-
-        # Check that arity is same
-        if len(self.candidate_spaces) != len(self.matchers):
-            raise ValueError("Mismatched arity of candidate space and matcher.")
-        else:
-            self.arity = len(self.candidate_spaces)
-
-        # Make sure the candidate spaces are different so generators aren't expended!
-        self.candidate_spaces = list(map(deepcopy, self.candidate_spaces))
-
-        # Preallocates internal data structures
-        self.child_context_sets = [None] * self.arity
-        for i in range(self.arity):
-            self.child_context_sets[i] = set()
-
-        super(CandidateExtractorUDF, self).__init__(**kwargs)
-
-    def apply(self, context, clear, split, **kwargs):
-        # Generate TemporaryContexts that are children of the context using the candidate_space and filtered
-        # by the Matcher
-        for i in range(self.arity):
-            self.child_context_sets[i].clear()
-            for tc in self.matchers[i].apply(self.candidate_spaces[i].apply(context)):
-                tc.load_id_or_insert(self.session)
-                self.child_context_sets[i].add(tc)
-
-        # Generates and persists candidates
-        extracted = set()
-        candidate_args = {'split': split}
-        for args in product(*[enumerate(child_contexts) for child_contexts in self.child_context_sets]):
-
-            # Apply candidate_filter if one was given
-            # Accepts a tuple of Context objects (e.g., (Span, Span))
-            # (candidate_filter returns whether or not proposed candidate passes throttling condition)
-            if self.candidate_filter:
-                if not self.candidate_filter(tuple(args[i][1] for i in range(self.arity))):
-                    continue
-
-            # TODO: Make this work for higher-order relations
-            if self.arity == 2:
-                ai, a = args[0]
-                bi, b = args[1]
-
-                # Check for self-joins, "nested" joins (joins from span to its subspan), and flipped duplicate
-                # "symmetric" relations. For symmetric relations, if mentions are of the same type, maintain
-                # their order in the sentence.
-                if not self.self_relations and a == b:
-                    continue
-                elif not self.nested_relations and (a in b or b in a):
-                    continue
-                elif not self.symmetric_relations and ((b, a) in extracted or
-                    (self.matchers[0] == self.matchers[1] and a.char_start > b.char_start)):
-                    continue
-
-                # Keep track of extracted
-                extracted.add((a,b))
-
-            # Assemble candidate arguments
-            for i, arg_name in enumerate(self.candidate_class.__argnames__):
-                candidate_args[arg_name + '_id'] = args[i][1].id
-
-            # Checking for existence
-            if not clear:
-                q = select([self.candidate_class.id])
-                for key, value in iteritems(candidate_args):
-                    q = q.where(getattr(self.candidate_class, key) == value)
-                candidate_id = self.session.execute(q).first()
-                if candidate_id is not None:
-                    continue
-
-            # Add Candidate to session
-            yield self.candidate_class(**candidate_args)
-        
-class CandidateExtractorFilter(UDFRunner):
-    """
-    An operator to extract Candidate objects from a Context.
-    :param candidate_class: The type of relation to extract, defined using
-                            :func:`snorkel.models.candidate_subclass <snorkel.models.candidate.candidate_subclass>`
-    :param cspaces: one or list of :class:`CandidateSpace` objects, one for each relation argument. Defines space of
-                    Contexts to consider
-    :param matchers: one or list of :class:`snorkel.matchers.Matcher` objects, one for each relation argument. Only tuples of
-                     Contexts for which each element is accepted by the corresponding Matcher will be returned as Candidates
-    :param candidate_filter: an optional function for filtering out candidates which returns a Boolean expressing whether or not
-                      the candidate should be instantiated.
-    :param self_relations: Boolean indicating whether to extract Candidates that relate the same context.
-                           Only applies to binary relations. Default is False.
-    :param nested_relations: Boolean indicating whether to extract Candidates that relate one Context with another
-                             that contains it. Only applies to binary relations. Default is False.
-    :param symmetric_relations: Boolean indicating whether to extract symmetric Candidates, i.e., rel(A,B) and rel(B,A),
-                                where A and B are Contexts. Only applies to binary relations. Default is False.
-    """
-    def __init__(self, candidate_class, cspaces, matchers, candidate_filter=None, self_relations=False, nested_relations=False, symmetric_relations=False):
-        super(CandidateExtractorFilter, self).__init__(CandidateExtractorUDF,
-                                                 candidate_class=candidate_class,
-                                                 cspaces=cspaces,
-                                                 matchers=matchers,
-                                                 candidate_filter=candidate_filter,
-                                                 self_relations=self_relations,
-                                                 nested_relations=nested_relations,
-                                                 symmetric_relations=symmetric_relations)
-
-    def apply(self, xs, split=0, **kwargs):
-        super(CandidateExtractorFilter, self).apply(xs, split=split, **kwargs)
-
-    def clear(self, session, split, **kwargs):
-        session.query(Candidate).filter(Candidate.split == split).delete()
-        
 class LocationMatcher(RegexMatchEach):
     """
     Matches Spans that are the names of locations, as identified by spaCy.
@@ -635,73 +491,6 @@ class HTMLListPreprocessor(HTMLDocPreprocessor):
                     if doc_count >= self.max_docs:
                         return
                     
-class ESTSVDocPreprocessor(DocPreprocessor):
-    """Simple parsing of TSV file drawn from Elasticsearch"""
-    
-    def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_fields=['extracted_text'], term='', max_doc_length=0):
-        super().__init__(path, encoding=encoding, max_docs=max_docs)
-        self.verbose = verbose
-        self.clean_docs = clean_docs
-        self.content_fields=content_fields
-        self.term=term
-        self.max_doc_length=max_doc_length
-        
-    def parse_file(self, fp, file_name):
-        with codecs.open(fp, encoding=self.encoding) as tsv:
-            for ind, line in enumerate(tsv):
-                if ind == 0:
-                    continue
-                try:
-                    # Loading data -- ignore malformatted entries!
-                    # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
-                except:
-                    print('Malformatted Line!')
-                    continue
-
-                # Cleaning documents if specified
-                if self.clean_docs:
-                    content = clean_input(content)
-                    memex_raw_content = get_posting_html(memex_raw_content, self.term)
-                    memex_url = parse_url(memex_url)
-
-                doc_text = ""
-                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
-                for field in self.content_fields:
-                    doc_text += field_names[field] + " "
-
-                doc_text = doc_text.strip()
-                doc_name = doc_id
-                source = content_type
-                extractions = extractions
-                
-                # Short documents are usually parsing errors...
-                if len(doc_text) < 10:
-                    if self.verbose:
-                        print('Short Doc!')
-                    continue
-       
-                # long documents sometimes causing parsing to stall
-                if self.max_doc_length and len(doc_text) > self.max_doc_length:
-                    if self.verbose:
-                        print('Long document')
-                    continue
-#                    doc_text = doc_text[-self.max_doc_length:]
- 
-                # Setting stable id
-                stable_id = self.get_stable_id(doc_name)
-                
-                # Yielding results, adding useful info to metadata
-                doc = Document(
-                    name=doc_name, stable_id=stable_id,
-                    meta={'domain': domain,
-                          'source': source,
-                          'extractions':extractions,
-                          'url':url}
-                )
-                yield doc, doc_text
-
 class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
@@ -753,12 +542,15 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 except:
                     print('Malformatted Line!')
                     continue
-
+                
                 # Cleaning documents if specified
                 if self.clean_docs:
-                    content = clean_input(content)
-                    memex_raw_content = get_posting_html(memex_raw_content, self.term)
-                    memex_url = parse_url(memex_url)
+                    if 'extracted_text' in self.content_fields:
+                        content = clean_input(content)
+                    if 'raw_content' in self.content_fields:
+                        memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
+                    if 'url' in self.content_fields:
+                        memex_url = parse_url(memex_url)
 
                 doc_text = ""
                 field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
@@ -780,9 +572,79 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 if self.max_doc_length and len(doc_text) > self.max_doc_length:
                     if self.verbose:
                         print('Long document')
-                    continue
-#                    doc_text = doc_text[-self.max_doc_length:]
+#                    continue
+                    doc_text = doc_text[-self.max_doc_length:]
                 
+                # Setting stable id
+                stable_id = self.get_stable_id(doc_name)
+            
+                # Yielding results, adding useful info to metadata
+                doc = Document(
+                    name=doc_name, stable_id=stable_id,
+                    meta={'domain': domain,
+                          'source': source,
+                          'extractions':extractions,
+                          'url':url}
+                )
+                yield doc, doc_text                    
+
+class ESTSVDocPreprocessor(DocPreprocessor):
+    """Simple parsing of TSV file drawn from Elasticsearch"""
+    
+    def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
+                 content_fields=['extracted_text'], term='', max_doc_length=0):
+        super().__init__(path, encoding=encoding, max_docs=max_docs)
+        self.verbose = verbose
+        self.clean_docs = clean_docs
+        self.content_fields=content_fields
+        self.term=term
+        self.max_doc_length=max_doc_length
+        
+    def parse_file(self, fp, file_name):
+        with codecs.open(fp, encoding=self.encoding) as tsv:
+            for ind, line in enumerate(tsv):
+                if ind == 0:
+                    continue
+                try:
+                    # Loading data -- ignore malformatted entries!
+                    # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
+                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                except:
+                    print('Malformatted Line!')
+                    continue
+
+                # Cleaning documents if specified
+                if self.clean_docs:
+                    if 'extracted_text' in self.content_fields:
+                        content = clean_input(content)
+                    if 'raw_content' in self.content_fields:
+                        memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
+                    if 'url' in self.content_fields:
+                        memex_url = parse_url(memex_url)
+
+                doc_text = ""
+                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
+                for field in self.content_fields:
+                    doc_text += field_names[field] + " "
+
+                doc_text = doc_text.strip()
+                doc_name = doc_id
+                source = content_type
+                extractions = extractions
+                
+                # Short documents are usually parsing errors...
+                if len(doc_text) < 10:
+                    if self.verbose:
+                        print('Short Doc!')
+                    continue
+       
+                # long documents sometimes causing parsing to stall
+                if self.max_doc_length and len(doc_text) > self.max_doc_length:
+                    if self.verbose:
+                        print('Long document')
+#                    continue
+                    doc_text = doc_text[-self.max_doc_length:]
+ 
                 # Setting stable id
                 stable_id = self.get_stable_id(doc_name)
                 
@@ -794,7 +656,8 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                           'extractions':extractions,
                           'url':url}
                 )
-                yield doc, doc_text                    
+
+                yield doc, doc_text
                 
 class MemexTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file from MEMEX (content.tsv)"""
@@ -933,6 +796,54 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
 ######################################################################################################
 ##### EXPOSED FUNCTIONS
 ######################################################################################################
+
+def parallel_parse_html(path, term='', threads=32, col=8):
+    """
+    Creates new tsv file with html field replaced with a parsed version from get_posting_html
+    
+    string path: path to data source -- folder of .tsv files
+    string term: regex supplied to get_posting_html
+    int col: column of html to parse
+    int threads: number of threads to create
+    """
+    pool = ThreadPool(threads) 
+
+    file_list = os.listdir(path)
+    path_list = [os.path.join(path, file) for file in file_list]
+    file_data = [(path, term, col) for path in path_list if path.endswith('tsv')]
+
+    out_dir = path + '/parsed/'
+
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    results = pool.map(parse_html, file_data)
+
+    pool.close()
+    pool.join()
+
+def parse_html(file_data):
+    """
+    Creates new tsv file with html field replaced with a parsed version from get_posting_html
+    
+    tuple file_data: (path to data source -- .tsv file, regex supplied to get_posting_html, column of html to parse)
+    """
+    in_loc, term, col = file_data
+    csv.field_size_limit(sys.maxsize)
+    
+    out_dir = os.path.dirname(in_loc) + '/parsed/'
+    out_loc = out_dir + os.path.basename(in_loc)
+    
+    with open(in_loc, 'r') as in_file, open(out_loc, 'w') as out_file:
+        reader = csv.reader(in_file, delimiter='\t')
+        writer = csv.writer(out_file, delimiter='\t')
+        
+        first_line = next(reader)
+        writer.writerow(first_line)
+        for line in reader:
+            line[col] = get_posting_html(line[col], term)
+            writer.writerow(line)
+
 def combine_dedupe(dev_loc, added_train_docs, out_loc):
     """
     Creates new tsv file by combining dev_loc and added_train_docs without duplicates.
@@ -1042,12 +953,7 @@ def create_candidate_class(extraction_type):
         LocationExtraction = candidate_subclass('Location', ['location'])
         candidate_class = LocationExtraction
         candidate_class_name = 'LocationExtraction'
-
-    elif extraction_type == 'phone':
-        PhoneExtraction = candidate_subclass('Phone', ['phone'])
-        candidate_class = PhoneExtraction
-        candidate_class_name = 'PhoneExtraction'
-
+    
     return candidate_class, candidate_class_name 
 
 def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_frac=0.1, seed=123, strip_end=False):
@@ -1193,19 +1099,7 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
                 label = 1
             else:
                 label = -1
-
-        elif target == 'phone':
-            val = phone_eval(ext.get_span())
-            clean_value = re.sub('[^A-Za-z0-9]+', '', val)
-            clean_gold_value = re.sub('[^A-Za-z0-9]+', '', target_strings)
-            if (clean_value in clean_gold_value) or (clean_gold_value in clean_value):
-                label = 1
-            else:
-                label = -1
-                
-        else:
-            raise ValueError('Unrecognized extraction type!')                    
-
+                    
            # Originally session.query(GoldLabel).filter(GoldLabel.key == ak).filter(GoldLabel.candidate == c).first()
            # TODO: figure out how to query on GoldLabel.key without error...
             existing_label = session.query(GoldLabel).filter(GoldLabel.candidate == c).first()
