@@ -745,20 +745,29 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         with codecs.open(fp, encoding=self.encoding) as tsv:
             for ind, line in enumerate(tsv):
                 if ind == 0:
+                    import pdb; pdb.set_trace()
+                    num_fields = len(line.split('\t')) 
                     continue
                 try:
                     # Loading data -- ignore malformatted entries!
                     # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    if num_fields == 21:
+                        (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    elif num_fields == 19:
+                        (memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    import pdb; pdb.set_trace()
                 except:
                     print('Malformatted Line!')
                     continue
 
                 # Cleaning documents if specified
                 if self.clean_docs:
-                    content = clean_input(content)
-                    memex_raw_content = get_posting_html(memex_raw_content, self.term)
-                    memex_url = parse_url(memex_url)
+                    if 'content' in self.content_fields:
+                        content = clean_input(content)
+                    if 'raw_content' in self.content_fields:
+                        memex_raw_content = get_posting_html(memex_raw_content, self.term)
+                    if 'url' in self.content_fields:
+                        memex_url = parse_url(memex_url)
 
                 doc_text = ""
                 field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
@@ -780,9 +789,9 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 if self.max_doc_length and len(doc_text) > self.max_doc_length:
                     if self.verbose:
                         0
-                        #print('Long document')
-                    continue
-#                    doc_text = doc_text[-self.max_doc_length:]
+                       # print('Long document')
+                    #continue
+                    doc_text = doc_text[-self.max_doc_length:]
                 
                 # Setting stable id
                 stable_id = self.get_stable_id(doc_name)

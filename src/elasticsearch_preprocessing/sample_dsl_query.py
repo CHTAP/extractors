@@ -117,7 +117,7 @@ with open(f'output_{args.extraction_field}.tsv', 'w') as csvfile:
     else:
         raise ValueError('Invalid output field arg!')
     
-    field_names = [f'memex_{a}' for a in memex_fields]+[a for a in content_fields]
+    field_names = [a for a in id_fields]+[f'memex_{a}' for a in memex_fields]+[a for a in content_fields]
     # create column header row
     filewriter.writerow(field_names)    #change the column labels here
    
