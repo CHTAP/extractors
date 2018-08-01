@@ -167,7 +167,10 @@ class city_index(object):
         if len(span) < 4 or reg.search(span):
             return False
 
-        city = True if self.cities[span.lower()] else False
+        all_cities = self.cities[span.lower()]
+        us_cities = [city for city in all_cities if city[2].lower() == 'us']
+        city = True if us_cities else False
+        
         state = span.title() in lookup_state_name(span)
         country = span.title() in lookup_country_name(span)
 
