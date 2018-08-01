@@ -181,7 +181,7 @@ def price_match(span_input):
         """       
 
         span = span_input.get_span()
-        reg = re.compile(r'([Pp]rice|[Rr]ate|[Cc]ost):? ?\$?\d\d\d?( ?([Dd]ollars?))?|(([Pp]rice|[Rr]ate|[Cc]ost):? ?)?\$?\d\d\d? ?([Dd]ollars?)?]')
+        reg = re.compile(r'(\d\d\d?.*?hours?|\d\d\d?.*?half|\d\d\d?.*?minutes?)')
         
         return True if reg.search(span) else False
 
@@ -208,11 +208,11 @@ def parse_url(text):
     text = clean_input(text)
     
     # Create spacing
-    text = text.replace('https', '').replace('http', '').replace('com', '')
+    text = text.replace('https', '').replace('http', '').replace('com', '').replace('www', '')
     text = text.replace(':', ' ').replace('/', ' ').replace('\\', ' ').replace('.', ' ').replace('-', ' ')
     
     # This format used to mark url while encouraging Snorkel to treat the entire url as a single sentence
-    url = 'Url ' + text.title() + '. '
+    url = 'Url ' + text.title() + ' <|> '
     
     url = fix_spacing(url)
     
@@ -265,13 +265,13 @@ def get_posting_html_fast(text, search_term):
     else:
         title = '-1'
         
-    html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + '. '
+    html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + ' <|> '
     for line in html_lines:
         if line:
-            html_text += ' ' + line + ' '
+            html_text += ' ' + line + ' <|> '
     for line in search_lines:
         if line:
-            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + '. '
+            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
         
     html_text = fix_spacing(html_text)
 
@@ -321,11 +321,11 @@ def get_posting_html(text, term):
 
             # OBJ_S marks the start of the term, OBJ_E marks the end
             if spec_clean_ratio < spec_max and clean_title and clean_line == clean_title:
-                html_text += ' Title ' + clean_line.replace('.', ' ').replace(':', ' ') + '. '
+                html_text += ' Title ' + clean_line.replace('.', ' ').replace(':', ' ') + ' <|> '
             elif spec_clean_ratio < spec_max and has_term:
-                html_text += ' Search ' + clean_line.replace('.', ' ').replace(':', ' ') + '. '
+                html_text += ' Search ' + clean_line.replace('.', ' ').replace(':', ' ') + ' <|> '
             elif spec_clean_ratio < spec_max:
-                html_text += ' ' + clean_line + ' '
+                html_text += ' ' + clean_line + ' <|> '
 
     html_text = fix_spacing(html_text)
     
@@ -549,8 +549,8 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                         content = clean_input(content)
                     if 'raw_content' in self.content_fields:
                         memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
-                    if 'url' in self.content_fields:
-                        memex_url = parse_url(memex_url)
+                if 'url' in self.content_fields:
+                    memex_url = parse_url(memex_url)
 
                 doc_text = ""
                 field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
@@ -618,9 +618,9 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     if 'extracted_text' in self.content_fields:
                         content = clean_input(content)
                     if 'raw_content' in self.content_fields:
-                        memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
-                    if 'url' in self.content_fields:
-                        memex_url = parse_url(memex_url)
+                        memex_raw_content = get_posting_html(memex_raw_content, self.term)
+                if 'url' in self.content_fields:
+                    memex_url = parse_url(memex_url)
 
                 doc_text = ""
                 field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
@@ -647,6 +647,9 @@ class ESTSVDocPreprocessor(DocPreprocessor):
  
                 # Setting stable id
                 stable_id = self.get_stable_id(doc_name)
+        
+                print(doc_text)
+                print()
                 
                 # Yielding results, adding useful info to metadata
                 doc = Document(
@@ -840,9 +843,12 @@ def parse_html(file_data):
         
         first_line = next(reader)
         writer.writerow(first_line)
-        for line in reader:
-            line[col] = get_posting_html(line[col], term)
-            writer.writerow(line)
+        for i, line in enumerate(reader):
+            try:
+                line[col] = get_posting_html(line[col], term)
+                writer.writerow(line)
+            except:
+                print('Error on line: ' + str(i))
 
 def combine_dedupe(dev_loc, added_train_docs, out_loc):
     """
@@ -953,10 +959,16 @@ def create_candidate_class(extraction_type):
         LocationExtraction = candidate_subclass('Location', ['location'])
         candidate_class = LocationExtraction
         candidate_class_name = 'LocationExtraction'
+
+    if extraction_type == 'price':
+        # Designing candidate subclasses
+        PriceExtraction = candidate_subclass('Price', ['price'])
+        candidate_class = PriceExtraction
+        candidate_class_name = 'PriceExtraction'
     
     return candidate_class, candidate_class_name 
 
-def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_frac=0.1, seed=123, strip_end=False):
+def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_frac=0.1, seed=123, strip_end=False, hand_label=False):
     """
     Creating train, dev, and test splits
     
@@ -998,7 +1010,9 @@ def create_test_train_splits(docs, quantity, gold_dict=None, dev_frac=0.1, test_
     # ensuring gold labeled data is added to test/dev
     for i, doc in enumerate(docs):
         try:
-            if gold_dict is None:
+            if hand_label:
+                quant_ind = True
+            elif gold_dict is None:
                 # If no gold_dict, use metadata for gold label quantities
                 strip_end = strip_end 
                 quant_ind = check_extraction_for_doc(doc, quantity, extractions_field='extractions',strip_end=strip_end)
