@@ -180,11 +180,12 @@ class city_index(object):
 ##### HELPER FUNCTIONS FOR PHONE	        
 ######################################################################################################
  # TODO: DOCSTRINGS!!!	        
- def phone_cleaning (c):
+def phone_cleaning (c):
     """ cleaning a candidate which has punctuations or letters, example: '8.3.2.8.9.7.8.2.1.0.&nbsp;Call' or '4143058071\\\\n'"""
     phone = re.sub("[^0-9]","", c)
     return phone
- def word_to_number(span_input):	        
+
+def word_to_number(span_input):	        
     num_dict = {"one":"1", 'two':"2", 'three':"3",'four':"4",'five':"5",'six':"6",'seven':"7",'eight':'8','nine':"9",'ten':'10'}
 
     for nb in ['one', 'two', 'three','four','five','six','seven','eight','nine','ten']:
@@ -208,7 +209,8 @@ def PhoneNumber( number ):
     exchange = number[3:6 ]
     line = number[6:]
     return "(%s) %s-%s" % ( areaCode, exchange, line )
- def arrange_phone(p):
+
+def arrange_phone(p):
     if len(p)==10:
         return PhoneNumber(p)
     if len(p)==11:
@@ -520,7 +522,8 @@ def get_candidate_stable_id(can):
 from snorkel.udf import UDF, UDFRunner
 from copy import deepcopy
 from itertools import product
- class CandidateExtractorUDF(UDF):
+
+class CandidateExtractorUDF(UDF):
     def __init__(self, candidate_class, cspaces, matchers, candidate_filter, self_relations, nested_relations, symmetric_relations, **kwargs):
         self.candidate_class     = candidate_class
         # Note: isinstance is the way to check types -- not type(x) in [...]!
@@ -541,8 +544,9 @@ from itertools import product
         self.child_context_sets = [None] * self.arity
         for i in range(self.arity):
             self.child_context_sets[i] = set()
-         super(CandidateExtractorUDF, self).__init__(**kwargs)
-     def apply(self, context, clear, split, **kwargs):
+        super(CandidateExtractorUDF, self).__init__(**kwargs)
+     
+    def apply(self, context, clear, split, **kwargs):
         # Generate TemporaryContexts that are children of the context using the candidate_space and filtered
         # by the Matcher
         for i in range(self.arity):
@@ -617,9 +621,9 @@ class CandidateExtractorFilter(UDFRunner):
                                                  self_relations=self_relations,
                                                  nested_relations=nested_relations,
                                                  symmetric_relations=symmetric_relations)
-     def apply(self, xs, split=0, **kwargs):
+    def apply(self, xs, split=0, **kwargs):
         super(CandidateExtractorFilter, self).apply(xs, split=split, **kwargs)
-     def clear(self, session, split, **kwargs):
+    def clear(self, session, split, **kwargs):
         session.query(Candidate).filter(Candidate.split == split).delete()
 
 class LocationMatcher(RegexMatchEach):
