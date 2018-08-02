@@ -12,3 +12,7 @@ SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
 ${where}
 EOF
+
+echo "reinitializing database"
+dropdb $1
+createdb $1
