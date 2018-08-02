@@ -3,7 +3,7 @@ import re
 from snorkel.lf_helpers import get_tagged_text
 import geograpy
 import googlemaps as gm
-from dataset_utils import city_index
+from dataset_utils import city_index, phone_eval
 from operator import itemgetter
 from nltk.corpus import words
 
@@ -102,6 +102,9 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
         if train_cand_preds[ind] == 1:
             for extraction in extractions:
                 ext = getattr(cand,extraction).get_span().lower()
+                if extraction == 'phone':
+                    ext = phone_eval(ext)
+                    doc_extractions.append[doc_name][extraction].append(ext)
                 if extraction == 'location':
                     geocode = loc_extraction(ext, cities, geocode_key)
                     confidence = 1 if ext in url else 0
