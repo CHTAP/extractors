@@ -176,6 +176,66 @@ class city_index(object):
 
         return city or state or country
 
+######################################################################################################
+##### HELPER FUNCTIONS FOR PHONE	        
+######################################################################################################
+ # TODO: DOCSTRINGS!!!	        
+ def phone_cleaning (c):
+    """ cleaning a candidate which has punctuations or letters, example: '8.3.2.8.9.7.8.2.1.0.&nbsp;Call' or '4143058071\\\\n'"""
+    phone = re.sub("[^0-9]","", c)
+    return phone
+ def word_to_number(span_input):	        
+    num_dict = {"one":"1", 'two':"2", 'three':"3",'four':"4",'five':"5",'six':"6",'seven':"7",'eight':'8','nine':"9",'ten':'10'}
+
+    for nb in ['one', 'two', 'three','four','five','six','seven','eight','nine','ten']:
+        if span_input.find(nb):
+            span_input = span_input.replace(nb,num_dict[nb] ).replace(" ","")
+    return span_input
+
+def count_(span_input, pattern):
+    count = 0
+    while len(span_input)>0:
+        idx = span_input.find(pattern) # returns first position of character matching pattern
+        span_input = span_input[idx+len(pattern):]
+        if idx<0:
+            break
+        else:
+            count+=1
+    return count
+
+def PhoneNumber( number ):
+    areaCode = number[0:3 ]
+    exchange = number[3:6 ]
+    line = number[6:]
+    return "(%s) %s-%s" % ( areaCode, exchange, line )
+ def arrange_phone(p):
+    if len(p)==10:
+        return PhoneNumber(p)
+    if len(p)==11:
+        return PhoneNumber(p[1:])
+    if len(p) == 13:
+        return PhoneNumber(p[3:])
+    else:
+        return p
+
+def phone_eval(phone):
+    for nb in ['one', 'two', 'three','four','five','six','seven','eight','nine','ten']:
+        if count_(phone,nb)!=0:
+            return arrange_phone(phone_cleaning(word_to_number(phone)))
+
+    if phone.isdigit():
+        result = arrange_phone(phone)
+        return result
+    else:
+        phone = phone_cleaning(phone)
+        if phone.isdigit():
+            result = arrange_phone(phone)
+            return result
+        else:
+            #phone =[]
+            #return []
+            return phone
+
 def price_match(span_input):
         """
         Uses regex to detect mentions of price
@@ -457,6 +517,111 @@ def get_candidate_stable_id(can):
 
 # MOST OF THESE CLASSES ARE DIFFS OFF OF EXISTING SNORKEL PREPROCESSORS
 
+from snorkel.udf import UDF, UDFRunner
+from copy import deepcopy
+from itertools import product
+ class CandidateExtractorUDF(UDF):
+    def __init__(self, candidate_class, cspaces, matchers, candidate_filter, self_relations, nested_relations, symmetric_relations, **kwargs):
+        self.candidate_class     = candidate_class
+        # Note: isinstance is the way to check types -- not type(x) in [...]!
+        self.candidate_spaces    = cspaces if isinstance(cspaces, (list, tuple)) else [cspaces]
+        self.matchers            = matchers if isinstance(matchers, (list, tuple)) else [matchers]
+        self.candidate_filter    = candidate_filter
+        self.nested_relations    = nested_relations
+        self.self_relations      = self_relations
+        self.symmetric_relations = symmetric_relations
+         # Check that arity is same
+        if len(self.candidate_spaces) != len(self.matchers):
+            raise ValueError("Mismatched arity of candidate space and matcher.")
+        else:
+            self.arity = len(self.candidate_spaces)
+         # Make sure the candidate spaces are different so generators aren't expended!
+        self.candidate_spaces = list(map(deepcopy, self.candidate_spaces))
+         # Preallocates internal data structures
+        self.child_context_sets = [None] * self.arity
+        for i in range(self.arity):
+            self.child_context_sets[i] = set()
+         super(CandidateExtractorUDF, self).__init__(**kwargs)
+     def apply(self, context, clear, split, **kwargs):
+        # Generate TemporaryContexts that are children of the context using the candidate_space and filtered
+        # by the Matcher
+        for i in range(self.arity):
+            self.child_context_sets[i].clear()
+            for tc in self.matchers[i].apply(self.candidate_spaces[i].apply(context)):
+                tc.load_id_or_insert(self.session)
+                self.child_context_sets[i].add(tc)
+         # Generates and persists candidates
+        extracted = set()
+        candidate_args = {'split': split}
+        for args in product(*[enumerate(child_contexts) for child_contexts in self.child_context_sets]):
+             # Apply candidate_filter if one was given
+            # Accepts a tuple of Context objects (e.g., (Span, Span))
+            # (candidate_filter returns whether or not proposed candidate passes throttling condition)
+            if self.candidate_filter:
+                if not self.candidate_filter(tuple(args[i][1] for i in range(self.arity))):
+                    continue
+             # TODO: Make this work for higher-order relations
+            if self.arity == 2:
+                ai, a = args[0]
+                bi, b = args[1]
+                 # Check for self-joins, "nested" joins (joins from span to its subspan), and flipped duplicate
+                # "symmetric" relations. For symmetric relations, if mentions are of the same type, maintain
+                # their order in the sentence.
+                if not self.self_relations and a == b:
+                    continue
+                elif not self.nested_relations and (a in b or b in a):
+                    continue
+                elif not self.symmetric_relations and ((b, a) in extracted or
+                    (self.matchers[0] == self.matchers[1] and a.char_start > b.char_start)):
+                    continue
+                 # Keep track of extracted
+                extracted.add((a,b))
+             # Assemble candidate arguments
+            for i, arg_name in enumerate(self.candidate_class.__argnames__):
+                candidate_args[arg_name + '_id'] = args[i][1].id
+             # Checking for existence
+            if not clear:
+                q = select([self.candidate_class.id])
+                for key, value in iteritems(candidate_args):
+                    q = q.where(getattr(self.candidate_class, key) == value)
+                candidate_id = self.session.execute(q).first()
+                if candidate_id is not None:
+                    continue
+             # Add Candidate to session
+            yield self.candidate_class(**candidate_args)
+
+class CandidateExtractorFilter(UDFRunner):
+    """
+    An operator to extract Candidate objects from a Context.
+    :param candidate_class: The type of relation to extract, defined using
+                            :func:`snorkel.models.candidate_subclass <snorkel.models.candidate.candidate_subclass>`
+    :param cspaces: one or list of :class:`CandidateSpace` objects, one for each relation argument. Defines space of
+                    Contexts to consider
+    :param matchers: one or list of :class:`snorkel.matchers.Matcher` objects, one for each relation argument. Only tuples of
+                     Contexts for which each element is accepted by the corresponding Matcher will be returned as Candidates
+    :param candidate_filter: an optional function for filtering out candidates which returns a Boolean expressing whether or not
+                      the candidate should be instantiated.
+    :param self_relations: Boolean indicating whether to extract Candidates that relate the same context.
+                           Only applies to binary relations. Default is False.
+    :param nested_relations: Boolean indicating whether to extract Candidates that relate one Context with another
+                             that contains it. Only applies to binary relations. Default is False.
+    :param symmetric_relations: Boolean indicating whether to extract symmetric Candidates, i.e., rel(A,B) and rel(B,A),
+                                where A and B are Contexts. Only applies to binary relations. Default is False.
+    """
+    def __init__(self, candidate_class, cspaces, matchers, candidate_filter=None, self_relations=False, nested_relations=False, symmetric_relations=False):
+        super(CandidateExtractorFilter, self).__init__(CandidateExtractorUDF,
+                                                 candidate_class=candidate_class,
+                                                 cspaces=cspaces,
+                                                 matchers=matchers,
+                                                 candidate_filter=candidate_filter,
+                                                 self_relations=self_relations,
+                                                 nested_relations=nested_relations,
+                                                 symmetric_relations=symmetric_relations)
+     def apply(self, xs, split=0, **kwargs):
+        super(CandidateExtractorFilter, self).apply(xs, split=split, **kwargs)
+     def clear(self, session, split, **kwargs):
+        session.query(Candidate).filter(Candidate.split == split).delete()
+
 class LocationMatcher(RegexMatchEach):
     """
     Matches Spans that are the names of locations, as identified by spaCy.
@@ -580,8 +745,8 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 if self.max_doc_length and len(doc_text) > self.max_doc_length:
                     if self.verbose:
                         print('Long document')
-#                    continue
-                    doc_text = doc_text[-self.max_doc_length:]
+                    continue
+                    #doc_text = doc_text[-self.max_doc_length:]
                 
                 # Setting stable id
                 stable_id = self.get_stable_id(doc_name)
@@ -991,6 +1156,11 @@ def create_candidate_class(extraction_type):
         candidate_class = LocationExtraction
         candidate_class_name = 'LocationExtraction'
 
+    if extraction_type == 'phone':
+        PhoneExtraction = candidate_subclass('Phone', ['phone'])	
+        candidate_class = PhoneExtraction
+        candidate_class_name = 'PhoneExtraction'
+
     if extraction_type == 'price':
         # Designing candidate subclasses
         PriceExtraction = candidate_subclass('Price', ['price'])
@@ -1151,6 +1321,18 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
             if existing_label is None:
                 session.add(GoldLabel(candidate=c, key=ak, value=label))                        
                 labels+=1
+
+        elif target == 'phone':
+            val = phone_eval(ext.get_span())
+            clean_value = re.sub('[^A-Za-z0-9]+', '', val)
+            clean_gold_value = re.sub('[^A-Za-z0-9]+', '', target_strings)
+            if (clean_value in clean_gold_value) or (clean_gold_value in clean_value):
+                label = 1
+            else:
+                label = -1
+
+        else:
+            raise ValueError('Unrecognized extraction type!')
 
     pb.close()
     print("AnnotatorLabels created: %s" % (labels,))
