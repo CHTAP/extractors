@@ -183,10 +183,15 @@ def price_match(span_input):
         string text: text to test for location
         """       
 
-        span = span_input.get_span()
-        reg = re.compile(r'(\d\d\d?.*?hours?|\d\d\d?.*?half|\d\d\d?.*?minutes?)')
-        
-        return True if reg.search(span) else False
+        span = span_input.get_span().lower()
+
+        reg = re.compile(r'^(\$?\d\d\d?[^\d,]{0,10}[^a-z0-9,]ho?u?r?|\$?\d\d\d?ho?u?r?|\$?\d\d\d?[^\d,]{0,10}60.?minutes?)$')
+        match = True if reg.search(span) else False
+
+        reg_neg = re.compile(r'half|hh|24|12|%|h\.')
+        neg_match = True if reg_neg.search(span) else False
+
+        return match and not neg_match
 
 def fix_spacing(text):
     """
@@ -261,7 +266,7 @@ def get_posting_html_fast(text, search_term):
 
     title = re.search(title_term, text)
     html_lines = [clean_input(line) for line in (re.findall(body_term, text) + re.findall(body_term2, text))]
-    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+#    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
     
     if title and title.group(1):
         title = clean_input(title.group(1))
@@ -272,9 +277,9 @@ def get_posting_html_fast(text, search_term):
     for line in html_lines:
         if line:
             html_text += ' ' + line + ' <|> '
-    for line in search_lines:
-        if line:
-            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
+#    for line in search_lines:
+#        if line:
+#            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
         
     html_text = fix_spacing(html_text)
 
@@ -621,7 +626,7 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     if 'extracted_text' in self.content_fields:
                         content = clean_input(content)
                     if 'raw_content' in self.content_fields:
-                        memex_raw_content = get_posting_html(memex_raw_content, self.term)
+                        memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
                 if 'url' in self.content_fields:
                     memex_url = parse_url(memex_url)
 
@@ -650,9 +655,6 @@ class ESTSVDocPreprocessor(DocPreprocessor):
  
                 # Setting stable id
                 stable_id = self.get_stable_id(doc_name)
-        
-                print(doc_text)
-                print()
                 
                 # Yielding results, adding useful info to metadata
                 doc = Document(
@@ -803,7 +805,7 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
 ##### EXPOSED FUNCTIONS
 ######################################################################################################
 
-def parallel_parse_html(path, term='', threads=32, col=8):
+def parallel_parse_html(path, term='', threads=32, col=10):
     """
     Creates new tsv file with html field replaced with a parsed version from get_posting_html
     
@@ -848,7 +850,7 @@ def parse_html(file_data):
         writer.writerow(first_line)
         for i, line in enumerate(reader):
             try:
-                line[col] = get_posting_html(line[col], term)
+                line[col] = get_posting_html_fast(line[col], term)
                 writer.writerow(line)
             except:
                 print('Error on line: ' + str(i))

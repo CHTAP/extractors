@@ -110,6 +110,11 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
                         doc_extractions[doc_name][extraction] = (geocode, confidence)
                     elif doc_extractions[doc_name][extraction][1] < confidence:
                         doc_extractions[doc_name][extraction] = (geocode, confidence)
+                elif extraction == 'price':
+                    reg_cost = re.compile(r'\d\d\d?')
+                    cost = reg_cost.search(ext).group(0) + '/hour'
+                    if not doc_extractions[doc_name][extraction]:
+                        doc_extractions[doc_name][extraction] = cost
                 elif ext not in doc_extractions[doc_name][extraction]:
                     doc_extractions[doc_name][extraction].append(ext)
         
