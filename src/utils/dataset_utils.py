@@ -21,7 +21,7 @@ import editdistance
 import geotext
 import geograpy
 from collections import defaultdict
-from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
@@ -1000,7 +1000,7 @@ class MEMEXJsonLGZIPPreprocessor(HTMLListPreprocessor):
 ##### EXPOSED FUNCTIONS
 ######################################################################################################
 
-def parallel_parse_html(path, term='', threads=32, col=10):
+def parallel_parse_html(path, term='', threads=30, col=10):
     """
     Creates new tsv file with html field replaced with a parsed version from get_posting_html
     
@@ -1009,7 +1009,7 @@ def parallel_parse_html(path, term='', threads=32, col=10):
     int col: column of html to parse
     int threads: number of threads to create
     """
-    pool = ThreadPool(threads) 
+    pool = Pool(threads) 
 
     file_list = os.listdir(path)
     path_list = [os.path.join(path, file) for file in file_list]

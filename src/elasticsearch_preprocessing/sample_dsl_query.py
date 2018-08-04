@@ -4,6 +4,7 @@ from elasticsearch_dsl import Search, Q, utils
 import csv
 import pprint
 from requests_aws4auth import AWS4Auth
+from multiprocessing import Pool
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -12,6 +13,8 @@ parser.add_argument('--index','-i',type=str,default='chtap')
 parser.add_argument('--max_docs', '-m', type=int, default=10000)
 parser.add_argument('--out_fields', '-of', type=str, default='full')
 parser.add_argument('--terms', '-t', type=str, default='')
+parser.add_argument('--parallel','-p',type=int, default=1)
+parser.add_argument('--suffix','-s',type=str,default='')
 args = parser.parse_args()
 
 def pprint_field(fld, str_format=True):
@@ -52,7 +55,8 @@ awsauth = AWS4Auth(AWS_ACCESS_KEY, AWS_SECRET_KEY, region, service)
 # Use this for IP permissions
 #client = Elasticsearch(host, timeout=600)
 
-client = Elasticsearch(
+def get_client(host):
+    client = Elasticsearch(
         hosts = [{'host': host, 'port': 443}],
         http_auth = awsauth,
         use_ssl = True,
@@ -64,6 +68,9 @@ client = Elasticsearch(
         retry_on_timeout=True,
         connection_class = RequestsHttpConnection
         )
+    return client
+
+client = get_client(host)
 
 # Setting index and max docs
 index = args.index
@@ -77,17 +84,17 @@ terms = args.terms
 # NOTE: using should instead of must gives many more results!
 if args.extraction_field != 'all':
     q = Q('bool',must=[
-      Q("exists",field="memex.extracted_text"),
+      Q("exists",field="memex.raw_content"),
       Q("exists",field=extraction_field)
       ])
 elif args.terms:
     q = Q('bool',must=[
-      Q("exists",field="memex.extracted_text"),
+      Q("exists",field="memex.raw_content"),
       Q("match",memex__extracted_text=terms)
       ])
 else:
     q = Q('bool',must=[
-      Q("exists",field="memex.extracted_text")
+      Q("exists",field="memex.raw_content")
       ])
 
 
@@ -96,49 +103,84 @@ else:
 s = Search(using=client, index="chtap").query(q)
 res = s.execute()
 
+
 print("%d documents found" % res['hits']['total'])
 
-# Writing results to file
-with open(f'output_{args.extraction_field}.tsv', 'w') as csvfile:   
-    filewriter = csv.writer(csvfile, delimiter='\t',  # we use TAB delimited, to handle cases where freeform text may have a comma
-                        quotechar='|', quoting=csv.QUOTE_MINIMAL)
+output_dir = f'output_{args.extraction_field}_{args.suffix}'
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
+
+def write_slice_to_file(slice_num):
+    
+    # Starting new client
+    client_slice = get_client(host)
+    s = Search(using=client_slice, index="chtap").query(q)
+
+    # Getting slice
+    if args.parallel>1:
+        s_slice = s.extra(slice={"id": slice_num, "max": args.parallel})
+    else:
+        s_slice = s
+
+    # Writing results to file
+    with open(os.path.join(output_dir,
+              f'{output_dir}_slice_{slice_num}.tsv'), 'w') as csvfile:   
+        filewriter = csv.writer(csvfile, delimiter='\t',  # we use TAB delimited, to handle cases where freeform text may have a comma
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
     # Setting fields to export    
-    id_fields = ["id", "uuid"]
-    if args.out_fields == 'full':
-        memex_fields = ["id", "content_type", "crawl_data", "crawler", \
+        id_fields = ["id", "uuid"]
+        if args.out_fields == 'full':
+            memex_fields = ["id", "content_type", "crawl_data", "crawler", \
                     "doc_type", "extracted_metadata", "extracted_text",\
                     "extractions", "raw_content", "team", "timestamp",\
                      "type", "url", "version"]
-        content_fields = ["domain", "type", "url", "content", "extractions"]
-    elif args.out_fields == 'extr_text':
-        memex_fields = ["id", "extracted_text", "url"]
-        content_fields = ["domain", "type", "url", "extractions"]
-    else:
-        raise ValueError('Invalid output field arg!')
+            content_fields = ["domain", "type", "url", "content", "extractions"]
+        elif args.out_fields == 'extr_text':
+            memex_fields = ["id", "extracted_text", "url"]
+            content_fields = ["domain", "type", "url", "extractions"]
+        elif args.out_fields == 'raw_content':
+            memex_fields = ["id", "doc_type", "raw_content", "url"]
+            content_fields = ["url", "extractions"]
+        else:
+            raise ValueError('Invalid output field arg!')
     
-    field_names = [a for a in id_fields]+[f'memex_{a}' for a in memex_fields]+[a for a in content_fields]
-    # create column header row
-    filewriter.writerow(field_names)    #change the column labels here
+        field_names = [a for a in id_fields]+[f'memex_{a}' for a in memex_fields]+[a for a in content_fields]
+        # create column header row
+        filewriter.writerow(field_names)    #change the column labels here
    
-    for ii,hit in enumerate(s.scan()):
-        row = []
-        for field in id_fields:
-            try:
-                row.append(pprint_field(hit[field]))
-            except:
-                row.append('-1')
-        for field in memex_fields:
-            try:
-                row.append(pprint_field(hit['memex'][field]))
-            except:
-                row.append('-1')
-        for field in content_fields:
-            try:
-                row.append(pprint_field(hit['content'][field]))
-            except:
-                row.append('-1')
+        for ii,hit in enumerate(s_slice.scan()):
+            row = []
+            for field in id_fields:
+                try:
+                    row.append(pprint_field(hit[field]))
+                except:
+                    row.append('-1')
+            for field in memex_fields:
+                try:
+                    row.append(pprint_field(hit['memex'][field]))
+                except:
+                    row.append('-1')
+            for field in content_fields:
+                try:
+                    row.append(pprint_field(hit['content'][field]))
+                except:
+                    row.append('-1')
 
-        filewriter.writerow(row)
-        if ii == max_docs:
-            break 
+            filewriter.writerow(row)
+            if ii == round(max_docs/args.parallel):
+                break 
+
+# Writing files in parallel
+
+from concurrent.futures import ThreadPoolExecutor
+
+if args.parallel>1:
+    pool = Pool(args.parallel)
+    pool.map(write_slice_to_file, range(args.parallel))
+   # with ThreadPoolExecutor(max_workers = args.parallel) as executor:
+   #     executor.map(write_slice_to_file,range(args.parallel))  
+    #     for i in range(args.parallel):
+   #         executor.submit(write_slice_to_file(i))
+else:
+   write_slice_to_file(1)
