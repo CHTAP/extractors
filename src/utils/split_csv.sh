@@ -7,6 +7,8 @@ EXTENSION="${FILE##*.}"
 FILENAME="${FILE%.*}"
 
 mkdir $FILENAME
-cd $FILENAME
 
 split -d --additional-suffix ".${EXTENSION}" -n $NUM $FILEPATH ${FILENAME}_shard_
+
+cd $FILENAME
+mv ../*shard* $FILENAME
