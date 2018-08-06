@@ -711,11 +711,16 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         with codecs.open(fp, encoding=self.encoding) as tsv:
             for ind, line in enumerate(tsv):
                 if ind == 0:
-                    continue
+                    fields = line.split('\t')
+                    num_fields = len(fields)
                 try:
                     # Loading data -- ignore malformatted entries!
                     # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                   # if num_fields == 21:
+                   #     (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    #elif num_fields == 8:
+                    (doc_id, uuid, memex_id, memex_doc_type, memex_raw_content, memex_url, url, extractions) = line.split('\t')
+                    content = None
                 except:
                     print('Malformatted Line!')
                     continue
@@ -736,7 +741,6 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
 
                 doc_text = doc_text.strip()
                 doc_name = doc_id
-                source = content_type
                 extractions = extractions
                 
                 # Short documents are usually parsing errors...
@@ -758,9 +762,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 # Yielding results, adding useful info to metadata
                 doc = Document(
                     name=doc_name, stable_id=stable_id,
-                    meta={'domain': domain,
-                          'source': source,
-                          'extractions':extractions,
+                    meta={'extractions':extractions,
                           'url':url}
                 )
                 yield doc, doc_text                    
@@ -1170,6 +1172,12 @@ def create_candidate_class(extraction_type):
         PriceExtraction = candidate_subclass('Price', ['price'])
         candidate_class = PriceExtraction
         candidate_class_name = 'PriceExtraction'
+        
+    if extraction_type == 'email':
+        # Designing candidate subclasses
+        PriceExtraction = candidate_subclass('Email', ['email'])
+        candidate_class = PriceExtraction
+        candidate_class_name = 'EmailExtraction'
     
     return candidate_class, candidate_class_name 
 

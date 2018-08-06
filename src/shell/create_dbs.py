@@ -7,11 +7,15 @@ import random
 import numpy as np
 import json
 
+# Adding path for utils
+sys.path.append('../utils')
+
 from dataset_utils import set_preprocessor
 from snorkel.parser import CorpusParser
-from simple_tokenizer import SimpleTokenizer
+from parser_utils import SimpleTokenizer
 from snorkel.models import Document, Sentence
 
+import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--file','-f',type=str, required=True)
 args = parser.parse_args()
@@ -25,11 +29,11 @@ with open('/dfs/scratch1/jdunnmon/data/memex-data/config/config.json') as fl:
 os.chdir(config['homedir'])
 
 #For PostgreSQL
+postgres_db_name = os.path.split(args['file'])[-1].split('.')[0]
 os.environ['SNORKELDB'] = os.path.join(config['postgres_location'], 
-                              config['postgres_db_name'])
+                              postgres_db_name)
 
-# Adding path for utils
-sys.path.append('../utils')
+print(f"Env: {os.environ['SNORKELDB']}")
 
 # Start Snorkel session
 from snorkel import SnorkelSession
@@ -39,7 +43,7 @@ session = SnorkelSession()
 parallelism = config['parallelism']
 
 # Setting random seed
-seed = config.seed
+seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
 
@@ -50,16 +54,18 @@ data_source = config['data_source']
 max_docs = config['max_docs']
 
 # Setting location of data source
-data_loc = os.path.join(config['data_loc'],args['file'])
+data_loc = args['file']
 
 # If memex_raw_content is a content_field, uses term as a regex in raw data in addition to getting title and body
 term = r'\b[Ll]ocation:|\b[cC]ity:'
+#term = r'(\$?\d\d\d?.*?per|\$?\d\d\d?.*?hours?|\$?\d\d\d?.*?half|\$?\d\d\d?.*?minutes?)'
 
 # Doc length in characters, remove to have no max
 max_doc_length=None
 
 # Setting preprocessor
-doc_preprocessor = set_preprocessor(data_source, data_loc, max_docs=max_docs, verbose=True, clean_docs=False,
+print(f'Preprocessing folder: {data_loc}')
+doc_preprocessor = set_preprocessor(data_source, data_loc, max_docs=max_docs, verbose=False, clean_docs=False,
                                     content_fields=['raw_content', 'url'], term=term, max_doc_length=max_doc_length)
 
 # Setting parser and applying corpus preprocessor
@@ -68,5 +74,8 @@ corpus_parser = CorpusParser(parser=parser)
 corpus_parser.apply(list(doc_preprocessor), parallelism=parallelism, verbose=False)
 
 # Printing number of docs/sentences
+print("==============================")
+print(f"DB creation results for {postgres_db_name}:")
 print("Documents:", session.query(Document).count())
 print("Sentences:", session.query(Sentence).count())
+print("==============================")
