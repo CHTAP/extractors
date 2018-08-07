@@ -183,4 +183,4 @@ if args.parallel>1:
     #     for i in range(args.parallel):
    #         executor.submit(write_slice_to_file(i))
 else:
-   write_slice_to_file(1)
+    write_slice_to_file(1)
