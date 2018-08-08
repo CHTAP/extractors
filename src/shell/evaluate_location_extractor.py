@@ -85,13 +85,13 @@ else:
     eval_marginals = lstm.marginals(eval_cands)
 
 # Geocoding
-from gm_utils import create_extractions_dict
+from gm_utils import create_extractions_dict, create_extractions_dict_parallel
 # Enter googlemaps api key to get geocodes, leave blank to just use extracted locations
 geocode_key = None
 # geocode_key = 'AIzaSyBlLyOaasYMgMxFGUh2jJyxIG0_pZFF_jM'
 print("Creating extractions dictionary...")
-doc_extractions = create_extractions_dict(session, eval_cands, eval_marginals, extractions=[extraction_type],
-                                          dummy=False, geocode_key=geocode_key)
+doc_extractions = create_extractions_dict_parallel(session, eval_cands, eval_marginals, extractions=[extraction_type],
+                                          dummy=False, geocode_key=geocode_key, slices=1)
 
 # Setting filename
 out_filename = "location_extraction_"+postgres_db_name+".jsonl"
