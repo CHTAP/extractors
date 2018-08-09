@@ -57,8 +57,9 @@ max_docs = config['max_docs']
 data_loc = args['file']
 
 # If memex_raw_content is a content_field, uses term as a regex in raw data in addition to getting title and body
-term = r'\b[Ll]ocation:|\b[cC]ity:'
+#term = r'\b[Ll]ocation:|\b[cC]ity:'
 #term = r'(\$?\d\d\d?.*?per|\$?\d\d\d?.*?hours?|\$?\d\d\d?.*?half|\$?\d\d\d?.*?minutes?)'
+term = r'([Ll]ocation:.{0,100}|[cC]ity:.{0,100}|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)'
 
 # Doc length in characters, remove to have no max
 max_doc_length=None

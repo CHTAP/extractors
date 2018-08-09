@@ -175,6 +175,85 @@ class city_index(object):
         country = span.title() in lookup_country_name(span)
 
         return city or state or country
+    
+    
+def set_price_data(span_input):
+    """
+    Sets common data used in price matchers
+    
+    temporary_span span_input: possible candidate to test
+    """
+    span = span_input.get_span().lower()
+    sent = span_input.sentence.text.lower()
+    right_sent = sent[span_input.char_end+1:][:15]
+    left_sent = sent[:span_input.char_start][-15:]
+ 
+    num_reg = re.compile(r'^(\d?\d[05])$')
+    hour_reg = re.compile(r'\Whr\W|\Whour\W|60 min|\Wh\W')    
+    half_reg = re.compile(r'half|hh|hlf|hhr|1\/2|30 min')
+    quick_reg = re.compile(r'qv')
+    
+    return span, sent, right_sent, left_sent, num_reg, hour_reg, half_reg, quick_reg
+
+def test_price_amount(num_reg, span, right_sent, left_sent):
+    """
+    Tests that candidate is a valid number that could be a price
+    
+    string num_reg: regex to test number
+    string right_sent: sentence chunk to the right of the candidate
+    string left_sent: sentence chunk to the left of the candidate
+    """
+    if not num_reg.search(span) or num_reg.search(span).group(0) == '00':
+        return False
+    
+    if right_sent[:1] == '-' or left_sent[-1:] == '-':
+        return False
+    
+    return True
+    
+def price_match_hour(span_input):
+    """
+    Uses regex to detect mentions of price
+    
+    string text: text to test for location
+    """    
+    span, sent, right_sent, left_sent, num_reg, hour_reg, half_reg, quick_reg = set_price_data(span_input)
+
+    if not test_price_amount(num_reg, span, right_sent, left_sent):
+        return False
+    
+    if half_reg.search(right_sent):
+        return False
+
+    if not hour_reg.search(right_sent):
+        return False
+    
+    if half_reg.search(left_sent) and num_reg.search(right_sent):
+        return False
+    
+    return True
+
+def price_match_half(span_input):
+    """
+    Uses regex to detect mentions of price
+    
+    string text: text to test for location
+    """    
+    span, sent, right_sent, left_sent, num_reg, hour_reg, half_reg, quick_reg = set_price_data(span_input)
+
+    if not test_price_amount(num_reg, span, right_sent, left_sent):
+        return False
+
+    if quick_reg.search(right_sent) or hour_reg.search(left_sent):
+        return False
+    
+    if not half_reg.search(right_sent):
+        return False
+    
+    if quick_reg.search(left_sent) and not num_reg.search(left_sent):
+        return False
+
+    return True
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR PHONE	        
@@ -1178,6 +1257,12 @@ def create_candidate_class(extraction_type):
         PriceExtraction = candidate_subclass('Email', ['email'])
         candidate_class = PriceExtraction
         candidate_class_name = 'EmailExtraction'
+        
+    if extraction_type == 'age':
+        # Designing candidate subclasses
+        AgeExtraction = candidate_subclass('Age', ['age'])
+        candidate_class = AgeExtraction
+        candidate_class_name = 'AgeExtraction'
     
     return candidate_class, candidate_class_name 
 

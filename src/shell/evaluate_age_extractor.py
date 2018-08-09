@@ -11,7 +11,6 @@ sys.path.append('../utils')
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--file','-f',type=str, required=True)
-parser.add_argument('--name','-n',type=str, required=True)
 args = parser.parse_args()
 args = vars(args)
 
@@ -41,11 +40,8 @@ np.random.seed(seed)
     
 # Setting extraction type -- should be a subfield in your data source extractions field!
 from dataset_utils import create_candidate_class
-extraction_type = 'price'
-if args['name'] == 'hour':
-    extraction_name = extraction_type+'_per_hour'
-elif args['name'] == 'half_hour':
-    extraction_name = extraction_type+'_per_half_hour'
+extraction_type = 'age'
+extraction_name = extraction_type
     
 # Creating candidate class
 candidate_class, candidate_class_name = create_candidate_class(extraction_type)
@@ -65,20 +61,22 @@ sents = session.query(Sentence).all()
 
 from snorkel.candidates import Ngrams
 from snorkel.candidates import CandidateExtractor
-from dataset_utils import create_candidate_class, price_match_hour, price_match_half
-from snorkel.matchers import LambdaFunctionMatcher
+from dataset_utils import create_candidate_class
+from snorkel.matchers import RegexMatchSpan, Union
 
 # Defining ngrams for candidates
-price_ngrams = Ngrams(n_max=1)
+age_ngrams = Ngrams(n_max=3)
 
 # Define matchers
-if args['name'] == 'hour':
-    price_matcher = LambdaFunctionMatcher(func=price_match_hour)
-elif args['name'] == 'half_hour':
-    price_matcher = LambdaFunctionMatcher(func=price_match_half)
+m = RegexMatchSpan(rgx = r'.*(I|He|She) (is|am) ^([0-9]{2})*')
+p = RegexMatchSpan(rgx = r'.*(age|is|@|was) ^([0-9]{2})*')
+q = RegexMatchSpan(rgx = r'.*(age:) ^([0-9]{2})*')
+r = RegexMatchSpan(rgx = r'.*^([0-9]{2}) (yrs|years|year|yr|old|year-old|yr-old|Years|Year|Yr)*')
+s = RegexMatchSpan(rgx = r'(^|\W)age\W{0,4}[1-9]\d(\W|$)')
 
 # Union matchers and create candidate extractor
-cand_extractor = CandidateExtractor(candidate_class, [price_ngrams], [price_matcher])
+age_matchers = Union(m,p,r,q, s)
+cand_extractor = CandidateExtractor(candidate_class, [age_ngrams], [age_matchers])
 
 # Applying candidate extractors
 cand_extractor.apply(sents, split=0, parallelism=parallelism)
@@ -95,20 +93,20 @@ eval_cands = session.query(candidate_class).order_by(candidate_class.id).all()
 print(f'Loaded {len(eval_cands)} candidates...')
 
 # Getting spans and doc_ids
-spans = [cand.price.get_span() for cand in eval_cands]
+spans = [cand.age.get_span() for cand in eval_cands]
 doc_ids = [cand.get_parent().get_parent().name for cand in eval_cands]
 
 # Applying regex
 print('Applying filtering regex...')
 import re
-reg_cost = re.compile(r'\d\d\d?')
-prices = [reg_cost.search(span).group(0) for span in spans]
+reg_age = re.compile(r'\d\d')
+extractions = [reg_age.search(span).group(0) for span in spans]
 
 # Creating output dictionary
 from collections import defaultdict
 doc_extractions = defaultdict(list)
 for i in range(len(eval_cands)):
-    doc_extractions[doc_ids[i]].append(prices[i])
+    doc_extractions[doc_ids[i]].append(extractions[i])
 
 # Setting filename
 out_filename = extraction_name+"_extraction_"+postgres_db_name+".jsonl"
@@ -125,4 +123,4 @@ with open(out_path, 'w') as outfile:
     for k,v in doc_extractions.items():
         d['id'] = k
         d[extraction_name] = v[0]
-        print(json.dumps(d), file=outfile)
+        print(json.dumps(v), file=outfile)
