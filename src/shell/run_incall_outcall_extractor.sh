@@ -19,5 +19,5 @@ do
     DBNAME=`basename ${FOLDERS[$iter]}`
     echo "Database: $DBNAME"
     echo "Starting node ${NODES[NODE_INDEX]} with database ${DBNAME}"
-    ssh -t jdunnmon@${NODES[NODE_INDEX]} <<< "export SNORKELDB=postgresql:///localhost:5432/${DBNAME}; export CUDA_VISIBLE_DEVICES=0; cd /dfs/scratch1/jdunnmon/repos/extractors/src/shell; source activate snorkel; echo 'Running price per hour extractor for node ${NODES[NODE_INDEX]} with database ${DBNAME} ...'; python evaluate_price_extractor.py -f ${FOLDERS[$iter]} -n hour; bash -l" &
+    ssh -t jdunnmon@${NODES[NODE_INDEX]} <<< "export SNORKELDB=postgresql:///localhost:5432/${DBNAME}; export CUDA_VISIBLE_DEVICES=0; cd /dfs/scratch1/jdunnmon/repos/extractors/src/shell; source activate snorkel; echo 'Running incall-outcall extractor for node ${NODES[NODE_INDEX]} with database ${DBNAME} ...'; python evaluate_incall_outcall_extractor.py -f ${FOLDERS[$iter]}; bash -l" &
 done

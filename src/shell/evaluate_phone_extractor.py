@@ -87,7 +87,7 @@ lstm = LSTM(n_threads=parallelism)
 # Getting gold label for each doc
 print("Running regex extractor...")
 doc_extractions = {}
-for ii, doc in enumerate(eval_cands):
+for ii, _ in enumerate(eval_cands):
     doc_extractions[doc.name] = {}
     if ii % 1000 == 0:
         print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')

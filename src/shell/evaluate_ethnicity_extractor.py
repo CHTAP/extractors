@@ -40,7 +40,7 @@ np.random.seed(seed)
     
 # Setting extraction type -- should be a subfield in your data source extractions field!
 from dataset_utils import create_candidate_class
-extraction_type = 'age'
+extraction_type = 'ethnicity'
 extraction_name = extraction_type
     
 # Creating candidate class
@@ -65,18 +65,14 @@ from dataset_utils import create_candidate_class
 from snorkel.matchers import RegexMatchSpan, Union
 
 # Defining ngrams for candidates
-age_ngrams = Ngrams(n_max=3)
+ngrams = Ngrams(n_max=1)
 
 # Define matchers
-m = RegexMatchSpan(rgx = r'.*(I|He|She) (is|am) ^([0-9]{2})*')
-p = RegexMatchSpan(rgx = r'.*(age|is|@|was) ^([0-9]{2})*')
-q = RegexMatchSpan(rgx = r'.*(age:) ^([0-9]{2})*')
-r = RegexMatchSpan(rgx = r'.*^([0-9]{2}) (yrs|years|year|yr|old|year-old|yr-old|Years|Year|Yr)*')
-s = RegexMatchSpan(rgx = r'(^|\W)age\W{0,4}[1-9]\d(\W|$)')
+regex_matcher_1=RegexMatchSpan(rgx = r'(black|ebony|chocolate|mocha|cocoa|white|blonde|asian|latina|arab)')
 
 # Union matchers and create candidate extractor
-age_matchers = Union(m,p,r,q, s)
-cand_extractor = CandidateExtractor(candidate_class, [age_ngrams], [age_matchers])
+matcher = regex_matcher_1
+cand_extractor = CandidateExtractor(candidate_class, [ngrams], [matcher])
 
 # Applying candidate extractors
 cand_extractor.apply(sents, split=0, parallelism=parallelism)
@@ -93,14 +89,12 @@ eval_cands = session.query(candidate_class).order_by(candidate_class.id).all()
 print(f'Loaded {len(eval_cands)} candidates...')
 
 # Getting spans and doc_ids
-spans = [cand.age.get_span() for cand in eval_cands]
+spans = [cand.ethnicity.get_span() for cand in eval_cands]
 doc_ids = [cand.get_parent().get_parent().name for cand in eval_cands]
 
 # Applying regex
 print('Applying filtering regex...')
-import re
-reg_age = re.compile(r'\d\d')
-extractions = [reg_age.search(span).group(0) for span in spans]
+extractions = [span for span in spans]
     
 # Creating output dictionary
 from collections import defaultdict

@@ -4,11 +4,11 @@ PTH=$1
 STARTIND=$2
 ENDIND=$3
 
-#NODES=("dawn1" "dawn2" "dawn3" "dawn4" "dawn5" "dawn6" "dawn7"
-#       "dawn8" "dawn9" "dawn10" "dawn11" "dawn12" "dawn13"
-#       "dawn14" "dawn15")
+NODES=("dawn1" "dawn2" "dawn3" "dawn4" "dawn5" "dawn6" "dawn7"
+       "dawn8" "dawn9" "dawn10" "dawn11" "dawn12" "dawn13"
+       "dawn14" "dawn15")
  
-NODES=("raiders5" "raiders2")
+#NODES=("raiders5" "raiders2")
 
 FOLDERS=(`find ${PTH} -mindepth 1 -maxdepth 1 -type d`)
 

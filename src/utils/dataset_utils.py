@@ -394,6 +394,38 @@ def clean_input(text):
 
     return text
 
+# def get_posting_html_fast(text, search_term):
+#     """
+#     Returns ad posting from html document in memex_raw_data
+    
+#     string text: memex_raw_data string
+#     term: regex of term to find
+#     """
+#     title_term = r'<[Tt]itle>(.*?)<\/[Tt]itle>'
+#     body_term = r'<div.{0,20}[Pp]ost.{0,20}>(.*?)<\/div>'
+#     body_term2 = r'<p>(.*?)<\/p>'
+
+#     title = re.search(title_term, text)
+#     html_lines = [clean_input(line) for line in (re.findall(body_term, text) + re.findall(body_term2, text))]
+# #    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+    
+#     if title and title.group(1):
+#         title = clean_input(title.group(1))
+#     else:
+#         title = '-1'
+        
+#     html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + ' <|> '
+#     for line in html_lines:
+#         if line:
+#             html_text += ' ' + line + ' <|> '
+# #    for line in search_lines:
+# #        if line:
+# #            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
+        
+#     html_text = fix_spacing(html_text)
+
+#     return html_text
+
 def get_posting_html_fast(text, search_term):
     """
     Returns ad posting from html document in memex_raw_data
@@ -401,29 +433,35 @@ def get_posting_html_fast(text, search_term):
     string text: memex_raw_data string
     term: regex of term to find
     """
-    title_term = r'<[Tt]itle>(.*?)<\/[Tt]itle>'
-    body_term = r'<div.{0,20}[Pp]ost.{0,20}>(.*?)<\/div>'
-    body_term2 = r'<p>(.*?)<\/p>'
+    title_term = r'<[Tt]itle>([\w\W]*?)</[Tt]itle>'
+    body_term = r'<div.{0,20}[Cc]ontent.{0,20}>([\w\W]*?)</div>'
+    body_term2 = r'<div.{0,20}[Pp]ost.{0,20}>([\w\W]*?)</div>'
+    body_term3 = r'<div.{0,20}[Tt]ext.{0,20}>([\w\W]*?)</div>'
+    body_term4 = r'<p>([\w\W]*?)</p>'
 
     title = re.search(title_term, text)
-    html_lines = [clean_input(line) for line in (re.findall(body_term, text) + re.findall(body_term2, text))]
-#    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+    body_lines = re.findall(body_term, text) + re.findall(body_term2, text) + re.findall(body_term3, text) + re.findall(body_term4, text)
+    html_lines = [clean_input(line) for line in body_lines]
     
     if title and title.group(1):
         title = clean_input(title.group(1))
     else:
         title = '-1'
-        
+
     html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + ' <|> '
+
     for line in html_lines:
         if line:
             html_text += ' ' + line + ' <|> '
-#    for line in search_lines:
-#        if line:
-#            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
+
+    if search_term:
+        search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+        for line in search_lines:
+            if line:
+                html_text += ' Search ' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
         
     html_text = fix_spacing(html_text)
-
+    
     return html_text
 
 def get_posting_html(text, term):
@@ -1263,6 +1301,18 @@ def create_candidate_class(extraction_type):
         AgeExtraction = candidate_subclass('Age', ['age'])
         candidate_class = AgeExtraction
         candidate_class_name = 'AgeExtraction'
+        
+    if extraction_type == 'call':
+        # Designing candidate subclasses
+        CallExtraction = candidate_subclass('Call', ['call'])
+        candidate_class = CallExtraction
+        candidate_class_name = 'CallExtraction'
+        
+    if extraction_type == 'ethnicity':
+        # Designing candidate subclasses
+        EthnicityExtraction = candidate_subclass('Ethnicity', ['ethnicity'])
+        candidate_class = EthnicityExtraction
+        candidate_class_name = 'EthnicityExtraction'
     
     return candidate_class, candidate_class_name 
 

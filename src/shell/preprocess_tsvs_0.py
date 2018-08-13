@@ -27,7 +27,8 @@ np.random.seed(seed)
 
 # If memex_raw_content is a content_field, uses term as a regex in raw data in addition to getting title and body
 #term = r'\b[Ll]ocation:|\b[cC]ity:'
-term = r'([Ll]ocation:.{0,100}|[cC]ity:.{0,100}|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)'
+#term = r'([Ll]ocation:.{0,100}|[cC]ity:.{0,100}|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)'
+term = r'([Ll]ocation:[\w\W]{1,200}</.{0,20}>|\W[cC]ity:[\w\W]{1,200}</.{0,20}>|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)'
 
 # Getting raw_content column
 print('Getting correct column...')

@@ -102,13 +102,17 @@ doc_ids = [cand.get_parent().get_parent().name for cand in eval_cands]
 print('Applying filtering regex...')
 import re
 reg_cost = re.compile(r'\d\d\d?')
-prices = [reg_cost.search(span).group(0) for span in spans]
+extractions = [reg_cost.search(span).group(0) for span in spans]
 
 # Creating output dictionary
 from collections import defaultdict
-doc_extractions = defaultdict(list)
-for i in range(len(eval_cands)):
-    doc_extractions[doc_ids[i]].append(prices[i])
+print("Running regex extractor...")
+doc_extractions = {}
+for ii, cand in enumerate(eval_cands):
+    doc_extractions[doc_ids[ii]] = defaultdict(list)
+    if ii % 1000 == 0:
+        print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')
+    doc_extractions[doc_ids[ii]][extraction_name].append(extractions[ii])
 
 # Setting filename
 out_filename = extraction_name+"_extraction_"+postgres_db_name+".jsonl"
@@ -124,5 +128,5 @@ with open(out_path, 'w') as outfile:
     d = {}
     for k,v in doc_extractions.items():
         d['id'] = k
-        d[extraction_name] = v[0]
+        d[extraction_name] = v[extraction_name]
         print(json.dumps(d), file=outfile)
