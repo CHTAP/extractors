@@ -124,6 +124,12 @@ def match_val_targets_location(val,targets):
 ######################################################################################################
 ##### HELPER FUNCTIONS
 ######################################################################################################
+def retrieve_all_files(dr):
+    lst = []
+    for root, directories, filenames in os.walk(dr):
+         for filename in filenames: 
+            lst.append(os.path.join(root,filename))
+    return lst
 
 class city_index(object):
     """
@@ -1168,6 +1174,46 @@ def parse_html(file_data):
                 writer.writerow(line)
             except:
                 print('Error on line: ' + str(i))
+                
+def parse_html_from_jsonl_gz(file_data):
+    """
+    Creates new tsv file from jsonl with html field replaced with a parsed version from get_posting_html
+    
+    tuple file_data: (path to data source -- .json file, regex supplied to get_posting_html, field name from jsonl)
+    """
+    in_loc, out_loc, term, field_dict, content_field = file_data
+    csv.field_size_limit(sys.maxsize)
+    out_dir = os.path.split(out_loc)[0]
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    
+    print(f'Preprocessing {in_loc}...')
+    with gzip.GzipFile(in_loc, 'r') as in_file, open(out_loc, 'w') as out_file:
+        
+        # Getting file objects
+        json_reader = in_file.read()
+        csv_writer = csv.writer(out_file, delimiter='\t')
+        
+        # Writing CSV header
+        fields = [k for k in field_dict.keys()]
+        csv_writer.writerow(fields)
+        
+        for ii, chunk in enumerate(json_reader.splitlines()):
+            data = json.loads(chunk)
+            line = []
+            for k in fields:
+                if field_dict[k] in data.keys():
+                    line.append(data[field_dict[k]])
+                else:
+                    line.append(-1)
+            content_ind = fields.index(content_field)
+            #import pdb; pdb.set_trace()
+            try:
+                line[content_ind] = get_posting_html_fast(line[content_ind], term)
+                csv_writer.writerow(line)
+            except:
+                0
+                #print('Error on line: ' + str(ii))
 
 def combine_dedupe(dev_loc, added_train_docs, out_loc):
     """
