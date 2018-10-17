@@ -87,7 +87,7 @@ def adjust_columns(df, cols):
 
 @profile
 def dump_df_to_csv(df, cols_to_write):
-    df.select(cols_to_write).write.option("maxRecordsPerFile", 1000000).csv(write_path,header = 'true',sep='\t',mode='overwrite')
+    df.select(cols_to_write).write.csv(write_path,header = 'true',sep='\t',mode='overwrite')
 
 if __name__=="__main__":
     
@@ -100,8 +100,8 @@ if __name__=="__main__":
     .getOrCreate()
 
     # Defining paths
-    data_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts/2015/08/15'
-    write_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts_preproc/spark_test/2015/08/15'
+    data_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts/2016'
+    write_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts_preproc/spark_test/2016'
 
     # Getting list of attributes to extract
     attr_list = ['doc_id','type', 'raw_content','url',\
