@@ -788,7 +788,7 @@ class HTMLListPreprocessor(HTMLDocPreprocessor):
 class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_fields=['extracted_text'], term='', max_doc_length=0):
+                 content_fields=['extracted_text'], term='', max_doc_length=0, data_source='es'):
         #self.encoding = encoding
         #self.max_docs = max_docs
         self.path = path
@@ -797,6 +797,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         self.content_fields=content_fields
         self.term=term
         self.max_doc_length=max_doc_length
+        self.data_source=data_source
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         
     def _get_files(self,path_list):
@@ -804,7 +805,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         return fpaths
     
     def _can_read(self, fpath):
-        return fpath.endswith('tsv')
+        return fpath.endswith('tsv') or fpath.endswith('csv')
     
     def generate(self):
         """
@@ -836,7 +837,10 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                    # if num_fields == 21:
                    #     (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
                     #elif num_fields == 8:
-                    (doc_id, uuid, memex_id, memex_doc_type, memex_raw_content, memex_url, url, extractions) = line.split('\t')
+                    if self.data_source='spark':
+                        (doc_id, memex_doc_type, memex_url, memex_url_parsed, memex_raw_content, extracted_phone, extracted_age, extracted_rate, extracted_ethnicity, extracted_email, extracted_incall) = line.split('\t')
+                    elif self.data_source='es':
+                        (doc_id, uuid, memex_id, memex_doc_type, memex_raw_content, memex_url, url, extractions) = line.split('\t')
                     content = None
                 except:
                     print('Malformatted Line!')
@@ -888,20 +892,20 @@ class ESTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file drawn from Elasticsearch"""
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_fields=['extracted_text'], term='', max_doc_length=0):
+                 content_fields=['extracted_text'], term='', max_doc_length=0, data_source=data_source):
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         self.verbose = verbose
         self.clean_docs = clean_docs
         self.content_fields=content_fields
         self.term=term
         self.max_doc_length=max_doc_length
-        
+        self.data_source=data_source  
     def _get_files(self,path_list):
         fpaths = [fl for fl in path_list]
         return fpaths
     
     def _can_read(self, fpath):
-        return fpath.endswith('tsv')
+        return fpath.endswith('tsv') or fpath.endswith('csv')
     
     def generate(self):
         """
@@ -930,7 +934,11 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                 try:
                     # Loading data -- ignore malformatted entries!
                     # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    if self.data_source='spark':
+                        (doc_id, memex_doc_type, memex_url, memex_url_parsed, memex_raw_content, extracted_phone, extracted_age, extracted_rate, extracted_ethnicity, extracted_email, extracted_incall) = line.split('\t')
+                    elif self.data_source='es':
+                        (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    content = None
                 except:
                     print('Malformatted Line!')
                     continue
@@ -1221,11 +1229,11 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
         )
     
     # For Elasticsearch
-    elif data_source == 'es':
+    elif data_source == 'es' or 'spark':
     
         # Initializing document preprocessor
         
-        if '.tsv' in data_loc:
+        if '.tsv' in data_loc or '.csv' in data_loc:
             print('Using single-threaded loader')
             doc_preprocessor = ESTSVDocPreprocessor(
             path=data_loc,
@@ -1234,7 +1242,8 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
             clean_docs=clean_docs,
             content_fields=content_fields,
             term=term,
-            max_doc_length=max_doc_length
+            max_doc_length=max_doc_length,
+            data_source=data_source
         )
         else:
             print('Using parallelized loader')
@@ -1245,7 +1254,8 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
             clean_docs=clean_docs,
             content_fields=content_fields,
             term=term,
-            max_doc_length=max_doc_length
+            max_doc_length=max_doc_length,
+            data_source=data_source
         )         
 
     # For MEMEX jsons -- loading from .jsonl.gz
