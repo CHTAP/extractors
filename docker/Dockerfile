@@ -124,5 +124,23 @@ RUN python -m spacy download en
 # Installing snorkel
 COPY snorkel /home/repos/snorkel
 WORKDIR /home/repos/snorkel
-#RUN export LANG=C.UTF-8
 RUN pip install --upgrade pip && LC_ALL="en_US.UTF-8" pip install .
+
+# Setting entrypoint
+
+ENTRYPOINT ["/home/repos/extractors/docker/entry.sh"]
+
+# These are args to entrypoint
+
+CMD []
+
+###########
+# run app #
+###########
+ # $ docker run -it --name snocker -p 8887:8887 -v ~/some/local/dir/mapped/to/snokel/projects:/home/snorkel/projects snocker:0.6.2
+# key: ctrl+p+q
+# $ docker exec -it snocker bash
+# root@ab1234:/# cd /home/snorkel
+# root@ab1234:/home/snorkel# ./run.sh
+# make sure to copy the token for accessing the notebooks
+# key: ctrl+p+q -to get out of running container 
