@@ -25,5 +25,15 @@ echo "Phone extractor complete!"
 
 # Running email extractor
 echo "Running email extractor..."
-python evaluate_email_extractor.py -f ${INFILE} -c $CONFIG
+#python evaluate_email_extractor.py -f ${INFILE} -c $CONFIG
 echo "Email extractor complete!"
+
+# Running age extractor
+echo "Running age extractor..."
+#python evaluate_age_extractor.py -f ${INFILE} -c $CONFIG
+echo "Age extractor complete!"
+
+# Eunning  extractor
+echo "Running ethnicity extractor..."
+python evaluate_ethnicity_extractor.py -f ${INFILE} -c $CONFIG
+Echo "Ethnicity extractor complete!"
