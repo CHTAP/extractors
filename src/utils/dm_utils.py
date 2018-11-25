@@ -3,15 +3,15 @@ import numpy as np
 
 import warnings
 
-from snorkel.learning.tensorflow.noise_aware_model import TFNoiseAwareModel
-from six.moves.cPickle import dump, load
-from time import time
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.utils.data as data_utils
 import torch.nn.functional as F
+
+from snorkel.learning.tensorflow.noise_aware_model import TFNoiseAwareModel
+from six.moves.cPickle import dump, load
+from time import time
 
 from snorkel.learning.utils import reshape_marginals, LabelBalancer
 

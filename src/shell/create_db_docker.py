@@ -11,24 +11,24 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--file','-f',type=str, required=True)
 parser.add_argument('--config','-c',type=str, required=True)
-parser.add_argument('--dbname','-d',type=str, required=True)
 args = parser.parse_args()
 args = vars(args)
 
+# Getting config
+with open(args['config']) as fl:
+    config = json.load(fl)
+
 #For PostgreSQL
-os.environ['SNORKELDB'] = os.path.join('postgresql://docker:docker@localhost:5432',args['dbname'])
+#os.environ['SNORKELDB'] = os.path.join('postgresql://docker:docker@localhost:5432',args['dbname'])
+os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],config['postgres_db_name'])
 
 # Adding path for utils
-sys.path.append('../src/utils')
+sys.path.append('../utils')
 
 from dataset_utils import set_preprocessor
 from snorkel.parser import CorpusParser
 from parser_utils import SimpleTokenizer
 from snorkel.models import Document, Sentence
-
-# Getting config
-with open(args['config']) as fl:
-    config = json.load(fl)
 
 # Changing directory to code area
 os.chdir(config['homedir'])
@@ -72,7 +72,7 @@ corpus_parser.apply(list(doc_preprocessor), parallelism=parallelism, verbose=Fal
 
 # Printing number of docs/sentences
 print("==============================")
-print(f"DB creation results for {args['dbname']}:")
+print(f"DB creation results for {config['postgres_db_name']}:")
 print("Documents:", session.query(Document).count())
 print("Sentences:", session.query(Sentence).count())
 print("==============================")
