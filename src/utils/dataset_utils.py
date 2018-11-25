@@ -25,7 +25,8 @@ from multiprocessing import Pool
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
-from snorkel.utils import ProgressBar
+#from snorkel.utils import ProgressBar
+from tqdm import tqdm
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR GOLD LABELING
@@ -837,9 +838,9 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                    # if num_fields == 21:
                    #     (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
                     #elif num_fields == 8:
-                    if self.data_source='spark':
+                    if self.data_source=='spark':
                         (doc_id, memex_doc_type, memex_url, memex_url_parsed, memex_raw_content, extracted_phone, extracted_age, extracted_rate, extracted_ethnicity, extracted_email, extracted_incall) = line.split('\t')
-                    elif self.data_source='es':
+                    elif self.data_source=='es':
                         (doc_id, uuid, memex_id, memex_doc_type, memex_raw_content, memex_url, url, extractions) = line.split('\t')
                     content = None
                 except:
@@ -892,7 +893,7 @@ class ESTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file drawn from Elasticsearch"""
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_fields=['extracted_text'], term='', max_doc_length=0, data_source=data_source):
+                 content_fields=['extracted_text'], term='', max_doc_length=0, data_source='es'):
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         self.verbose = verbose
         self.clean_docs = clean_docs
@@ -912,8 +913,11 @@ class ESTSVDocPreprocessor(DocPreprocessor):
         Parses a file or directory of files into a set of Document objects.
         """
         doc_count = 0
-        file_list = os.listdir(self.path)
-        file_list = [os.path.join(self.path, fl) for fl in file_list]
+        if os.path.isfile(self.path):
+            file_list = [self.path]
+        else:
+            file_list = os.listdir(self.path)
+            file_list = [os.path.join(self.path, fl) for fl in file_list]
         for file_name in self._get_files(file_list):
             if self._can_read(file_name):
                 for doc, text in self.parse_file(file_name):
@@ -934,9 +938,9 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                 try:
                     # Loading data -- ignore malformatted entries!
                     # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    if self.data_source='spark':
+                    if self.data_source=='spark':
                         (doc_id, memex_doc_type, memex_url, memex_url_parsed, memex_raw_content, extracted_phone, extracted_age, extracted_rate, extracted_ethnicity, extracted_email, extracted_incall) = line.split('\t')
-                    elif self.data_source='es':
+                    elif self.data_source=='es':
                         (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
                     content = None
                 except:
@@ -950,17 +954,29 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     if 'raw_content' in self.content_fields:
                         memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
                 if 'url' in self.content_fields:
-                    memex_url = parse_url(memex_url)
+                    memex_url_parsed = parse_url(memex_url)
 
                 doc_text = ""
-                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
+                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url_parsed}
                 for field in self.content_fields:
                     doc_text += field_names[field] + " "
+                    doc_text = doc_text.strip()
+                    doc_name = doc_id
 
-                doc_text = doc_text.strip()
-                doc_name = doc_id
-                source = content_type
-                extractions = extractions
+                if self.data_source=='spark':
+                    source = memex_doc_type
+                    extractions = {
+                                   'phone': extracted_phone,
+                                   'age': extracted_age,
+                                   'rate': extracted_rate,
+                                   'ethnicity': extracted_ethnicity,
+                                   'email': extracted_email,
+                                   'incall': extracted_incall
+                               }
+                    domain=''
+                elif self.data_source=='es':
+                    source = content_type
+                    extractions = extractions
                 
                 # Short documents are usually parsing errors...
                 if len(doc_text) < 10:
@@ -984,7 +1000,7 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     meta={'domain': domain,
                           'source': source,
                           'extractions':extractions,
-                          'url':url}
+                          'url':memex_url}
                 )
 
                 yield doc, doc_text
@@ -1428,8 +1444,8 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
     candidates = session.query(candidate_class).filter(candidate_class.split == split).all()
     cand_total = len(candidates)
     print('Loading', cand_total, 'candidate labels')
-    pb = ProgressBar(cand_total)
-    
+    #pb = ProgressBar(cand_total)
+    pb=tdqdm(cand_total)
     # Tracking number of labels
     labels=0
     
