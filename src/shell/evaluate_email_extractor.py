@@ -11,24 +11,34 @@ sys.path.append('../utils')
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--file','-f',type=str, required=True)
+parser.add_argument('--config','-c',type=str,
+                    default='/dfs/scratch1/jdunnmon/data/memex-data/config/config.json')
 args = parser.parse_args()
 args = vars(args)
 
 # Getting config
-with open('/dfs/scratch1/jdunnmon/data/memex-data/config/config.json') as fl:
+with open(args['config']) as fl:
     config = json.load(fl)
 
 # Changing directory to code area
 os.chdir(config['homedir'])
 
-#For PostgreSQL
-postgres_db_name = os.path.split(args['file'])[-1].split('.')[0]
-os.environ['SNORKELDB'] = os.path.join(config['postgres_location'], 
+# For PostgreSQL
+if 'postgres_db_name' not in config.keys():
+    postgres_db_name = os.path.split(args['file'])[-1].split('.')[0]
+else:
+    postgres_db_name = config['postgres_db_name']
+
+print(postgres_db_name)
+os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
                               postgres_db_name)
 
 # Start Snorkel session
 from snorkel import SnorkelSession
 session = SnorkelSession()
+
+#import torch first to stop TLS error
+from dm_utils import LSTM
 
 # Setting parallelism
 parallelism = config['parallelism']

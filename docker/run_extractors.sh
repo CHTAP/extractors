@@ -15,10 +15,15 @@ source activate chtap
 
 # Creating database
 echo "Filling Database: $DBNAME" 
-python create_db_docker.py -f ${INFILE} -c $CONFIG
+#python create_db_docker.py -f ${INFILE} -c $CONFIG
 echo "Completed database creation!"
 
 # Running phone extractor
 echo "Running phone extractor..."
-python evaluate_phone_extractor.py -f ${INFILE} -c $CONFIG 
-echo "Phone extractor copmlete!"
+#python evaluate_phone_extractor.py -f ${INFILE} -c $CONFIG 
+echo "Phone extractor complete!"
+
+# Running email extractor
+echo "Running email extractor..."
+python evaluate_email_extractor.py -f ${INFILE} -c $CONFIG
+echo "Email extractor complete!"
