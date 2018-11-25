@@ -33,7 +33,26 @@ echo "Running age extractor..."
 #python evaluate_age_extractor.py -f ${INFILE} -c $CONFIG
 echo "Age extractor complete!"
 
-# Eunning  extractor
+# Running ethnicity extractor
 echo "Running ethnicity extractor..."
-python evaluate_ethnicity_extractor.py -f ${INFILE} -c $CONFIG
-Echo "Ethnicity extractor complete!"
+#python evaluate_ethnicity_extractor.py -f ${INFILE} -c $CONFIG
+echo "Ethnicity extractor complete!"
+
+# TODO: FOR LOCATION: NEED TO ADD SAVED LSTM PATH!
+# Running location extractor
+echo "Running location extractor..."
+#python extract_location_candidates.py -f ${INFILE} -c $CONFIG
+#python evaluate_location_extractor.py -f ${INFILE} -c $CONFIG
+echo "Location extractor complete!"
+
+# Running incall outcall extractor
+echo "Running incall outcall extractor..."
+python evaluate_incall_outcall_extractor.py -f ${INFILE} -c $CONFIG
+echo "Location extractor complete!"
+
+#Running price extractor
+echo "Running price per hour extractor..."
+#python extract_price_candidates.py -f ${INFILE} -c $CONFIG -n hour
+#python evaluate_price_extractor.py -f ${INFILE} -c $CONFIG -n hour
+echo "Price extractor complete!"
+
