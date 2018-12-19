@@ -14,7 +14,7 @@ parser.add_argument('--file','-f',type=str, required=True)
 parser.add_argument('--config','-c',type=str,
                     default='/dfs/scratch1/jdunnmon/data/memex-data/config/config.json')
 
-parser.add_argument('--name','-n',type=str, required=True)arser.add_argument('--file','-f',type=str, required=True)
+parser.add_argument('--name','-n',type=str, required=True)
 args = parser.parse_args()
 args = vars(args)
 
@@ -31,9 +31,12 @@ if 'postgres_db_name' not in config.keys():
 else:
     postgres_db_name = config['postgres_db_name']
 
-print(postgres_db_name)
-os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
+if config['use_pg']:
+    print(postgres_db_name)
+    os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
                               postgres_db_name)
+else:
+    print('Using SQLite...')
 
 # Start Snorkel session
 from snorkel import SnorkelSession

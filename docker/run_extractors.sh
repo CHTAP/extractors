@@ -15,22 +15,22 @@ source activate chtap
 
 # Creating database
 echo "Filling Database: $DBNAME" 
-#python create_db_docker.py -f ${INFILE} -c $CONFIG
+python create_db_docker.py -f ${INFILE} -c $CONFIG
 echo "Completed database creation!"
 
 # Running phone extractor
 echo "Running phone extractor..."
-#python evaluate_phone_extractor.py -f ${INFILE} -c $CONFIG 
+python evaluate_phone_extractor.py -f ${INFILE} -c $CONFIG 
 echo "Phone extractor complete!"
 
 # Running email extractor
 echo "Running email extractor..."
-#python evaluate_email_extractor.py -f ${INFILE} -c $CONFIG
+python evaluate_email_extractor.py -f ${INFILE} -c $CONFIG
 echo "Email extractor complete!"
 
 # Running age extractor
 echo "Running age extractor..."
-#python evaluate_age_extractor.py -f ${INFILE} -c $CONFIG
+python evaluate_age_extractor.py -f ${INFILE} -c $CONFIG
 echo "Age extractor complete!"
 
 # Running ethnicity extractor
@@ -52,7 +52,7 @@ echo "Location extractor complete!"
 
 #Running price extractor
 echo "Running price per hour extractor..."
-#python extract_price_candidates.py -f ${INFILE} -c $CONFIG -n hour
-#python evaluate_price_extractor.py -f ${INFILE} -c $CONFIG -n hour
+python extract_price_candidates.py -f ${INFILE} -c $CONFIG
+python evaluate_price_extractor.py -f ${INFILE} -c $CONFIG -n hour
 echo "Price extractor complete!"
 

@@ -20,8 +20,10 @@ with open(args['config']) as fl:
 
 #For PostgreSQL
 #os.environ['SNORKELDB'] = os.path.join('postgresql://docker:docker@localhost:5432',args['dbname'])
-os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],config['postgres_db_name'])
-
+if config['use_pg']:
+    os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],config['postgres_db_name'])
+else:
+    print('Using SQLite...')
 # Adding path for utils
 sys.path.append('../utils')
 

@@ -30,15 +30,12 @@ else:
     postgres_db_name = config['postgres_db_name']
 
 print(postgres_db_name)
-os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
-                              postgres_db_name)
+#os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
+#                              postgres_db_name)
 
 # Start Snorkel session
 from snorkel import SnorkelSession
 session = SnorkelSession()
-
-#import torch first to stop TLS error
-from dm_utils import LSTM
 
 # Parallelism
 parallelism = config['parallelism']
