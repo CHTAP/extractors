@@ -41,7 +41,7 @@ from snorkel import SnorkelSession
 session = SnorkelSession()
 
 #import torch first to stop TLS error
-From dm_utils import LSTM
+from dm_utils import LSTM
 
 # Setting up parallelism
 parallelism = config['parallelism']

@@ -41,7 +41,7 @@ from snorkel import SnorkelSession
 session = SnorkelSession()
 
 #import torch first to stop TLS error
-From dm_utils import LSTM
+from dm_utils import LSTM
 parallelism = config['parallelism']
 
 # Setting random seed
@@ -72,7 +72,7 @@ print(f'Loaded {len(eval_cands)} candidates...')
 
 # defining model
 from dm_utils import LSTM
-lstm = LSTM(n_threads=parallelism)
+lstm = LSTM(n_threads=config['dm_parallelism'])
 
 # defining saved weights directory and name
 model_name = 'location_lstm' # this was provided when the model was saved!

@@ -41,8 +41,8 @@ echo "Ethnicity extractor complete!"
 # TODO: FOR LOCATION: NEED TO ADD SAVED LSTM PATH!
 # Running location extractor
 echo "Running location extractor..."
-#python extract_location_candidates.py -f ${INFILE} -c $CONFIG
-#python evaluate_location_extractor.py -f ${INFILE} -c $CONFIG
+python extract_location_candidates.py -f ${INFILE} -c $CONFIG
+python evaluate_location_extractor.py -f ${INFILE} -c $CONFIG
 echo "Location extractor complete!"
 
 # Running incall outcall extractor
