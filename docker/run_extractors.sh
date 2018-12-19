@@ -35,7 +35,7 @@ echo "Age extractor complete!"
 
 # Running ethnicity extractor
 echo "Running ethnicity extractor..."
-#python evaluate_ethnicity_extractor.py -f ${INFILE} -c $CONFIG
+python evaluate_ethnicity_extractor.py -f ${INFILE} -c $CONFIG
 echo "Ethnicity extractor complete!"
 
 # TODO: FOR LOCATION: NEED TO ADD SAVED LSTM PATH!

@@ -29,9 +29,12 @@ if 'postgres_db_name' not in config.keys():
 else:
     postgres_db_name = config['postgres_db_name']
 
-print(postgres_db_name)
-os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
+if config['use_pg']:
+    print(postgres_db_name)
+    os.environ['SNORKELDB'] = os.path.join(config['postgres_location'],
                               postgres_db_name)
+else:
+    print('Using SQLite...')
 
 # Start Snorkel session
 from snorkel import SnorkelSession
