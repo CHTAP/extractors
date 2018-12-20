@@ -5,6 +5,8 @@ import random
 import numpy as np
 import json
 
+import faulthandler; faulthandler.enable()
+
 # Adding path for utils
 sys.path.append('../utils')
 
@@ -76,11 +78,12 @@ lstm = LSTM(n_threads=config['dm_parallelism'])
 
 # defining saved weights directory and name
 model_name = 'location_lstm' # this was provided when the model was saved!
-save_dir = '/dfs/scratch0/jdunnmon/data/memex-data/extractor_checkpoints' # this was provided when the model was saved!
+save_dir = '../../model_checkpoints/location' # this was provided when the model was saved!
 
 # loading
 print("Loading LSTM...")
-lstm.load(model_name=model_name, save_dir=save_dir, verbose=True)
+lstm.load(model_name=model_name, save_dir=save_dir, verbose=True, map_location={'cuda:0': 'cpu'}, update_kwargs={'host_device':'cpu', 'use_cuda':False})
+lstm.model.use_cuda=False
 
 # Making sure we have a GPU accessible
 os.environ['CUDA_VISIBLE_DEVICES']='0'
@@ -90,20 +93,29 @@ print("Evaluating marginals...")
 import torch
 if torch.cuda.is_available():
     print(f'Using GPU for {postgres_db_name}')
-    eval_marginals = lstm._marginals_batch(eval_cands)
+    #eval_marginals = lstm._marginals_batch(eval_cands)
 else:
     print(f'Using CPU for {postgres_db_name}')
-    eval_marginals = lstm.marginals(eval_cands)
+    #eval_marginals = lstm.marginals(eval_cands)
 
+#try:
+    eval_marginals = lstm._marginals_batch(eval_cands)
+    print('Marginals computed...')
+#except:
+    print('Exception in marginals')
+
+#eval_marginals = torch.zeros((len(eval_cands),))
 # Geocoding
+print('Importing gm_utils...')
 from gm_utils import create_extractions_dict, create_extractions_dict_parallel
-# Enter googlemaps api key to get geocodes, leave blank to just use extracted locations
+    # Enter googlemaps api key to get geocodes, leave blank to just use extracted locations
 geocode_key = None
 # geocode_key = 'AIzaSyBlLyOaasYMgMxFGUh2jJyxIG0_pZFF_jM'
 print("Creating extractions dictionary...")
 doc_extractions = create_extractions_dict_parallel(session, eval_cands, eval_marginals, extractions=[extraction_type],
-                                          dummy=False, geocode_key=geocode_key, slices=1)
-
+                                         dummy=False, geocode_key=geocode_key, slices=1)
+#except:
+#    print('Exception in creating extractions dict')
 # Setting filename
 out_filename = "location_extraction_"+postgres_db_name+".jsonl"
 out_folder = os.path.join(config['output_dir'], 'location')

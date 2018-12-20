@@ -137,12 +137,11 @@ class city_index(object):
     cities = defaultdict(set)
     
     def __init__(self, file_loc):
-        with open(file_loc, 'r') as file:
+        with open(file_loc, 'r', encoding='utf-8') as fl:
 
-            lines = list(file)
             cities = defaultdict(set)
 
-            for line in lines:
+            for line in fl:
                 columns = line.split('\t')
                 value = (columns[1], columns[10], columns[8], int(columns[14]), float(columns[4]), float(columns[5]))
                 
