@@ -14,9 +14,13 @@ sudo /etc/init.d/postgresql restart
 # PUT CODE HERE FOR RUNNING EXTRACTORS!
 for entry in "/data"/*
 do
+echo "$entry"
+if [ "$entry" != "/data/input.csv" ]; then
     echo "Running extractors on $entry"
     bash /home/repos/extractors/docker/run_extractors.sh $entry /config/run_config.json
+fi
 done
+
 
 # COMPLETE!
 echo "Extraction complete"
