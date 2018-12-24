@@ -24,8 +24,13 @@ with open(args['config']) as fl:
 os.chdir(config['homedir'])
 
 #For PostgreSQL
+if '.' in args['file']:
+    filename = os.path.split(args['file'])[-1].split('.')[0]
+else:
+    filename = os.path.split(args['file'])[-1]
+
 if 'postgres_db_name' not in config.keys():
-    postgres_db_name = os.path.split(args['file'])[-1].split('.')[0]
+    postgres_db_name = filename
 else:
     postgres_db_name = config['postgres_db_name']
 

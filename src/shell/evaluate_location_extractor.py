@@ -26,8 +26,13 @@ with open(args['config']) as fl:
 os.chdir(config['homedir'])
 
 #For PostgreSQL
+if '.' in args['file']:
+    filename = os.path.split(args['file'])[-1].split('.')[0]
+else:
+    filename = os.path.split(args['file'])[-1]
+
 if 'postgres_db_name' not in config.keys():
-    postgres_db_name = os.path.split(args['file'])[-1].split('.')[0]
+    postgres_db_name = filename
 else:
     postgres_db_name = config['postgres_db_name']
 
@@ -54,6 +59,7 @@ np.random.seed(seed)
 # Setting extraction type -- should be a subfield in your data source extractions field!
 from dataset_utils import create_candidate_class
 extraction_type = 'location'
+extraction_name = extraction_type
 
 # Creating candidate class
 candidate_class, candidate_class_name = create_candidate_class(extraction_type)
@@ -116,9 +122,11 @@ doc_extractions = create_extractions_dict_parallel(session, eval_cands, eval_mar
                                          dummy=False, geocode_key=geocode_key, slices=1)
 #except:
 #    print('Exception in creating extractions dict')
+
+
 # Setting filename
-out_filename = "location_extraction_"+postgres_db_name+".jsonl"
-out_folder = os.path.join(config['output_dir'], 'location')
+out_filename = extraction_name+"_extraction_"+filename+".jsonl"
+out_folder = os.path.join(config['output_dir'], extraction_name)
 out_path = os.path.join(out_folder, out_filename)
 
 if not os.path.exists(out_folder):

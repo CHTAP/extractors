@@ -24,8 +24,13 @@ with open(args['config']) as fl:
 os.chdir(config['homedir'])
 
 #For PostgreSQL
+if '.' in args['file']:
+    filename = os.path.split(args['file'])[-1].split('.')[0]
+else:
+    filename = os.path.split(args['file'])[-1]
+
 if 'postgres_db_name' not in config.keys():
-    postgres_db_name = os.path.split(args['file'])[-1].split('.')[0]
+    postgres_db_name = filename
 else:
     postgres_db_name = config['postgres_db_name']
 
@@ -117,7 +122,7 @@ for ii, cand in enumerate(eval_cands):
     doc_extractions[doc_ids[ii]][extraction_name].append(extractions[ii])
 
 # Setting filename
-out_filename = extraction_name+"_extraction_"+postgres_db_name+".jsonl"
+out_filename = extraction_name+"_extraction_"+filename+".jsonl"
 out_folder = os.path.join(config['output_dir'], extraction_name)
 out_path = os.path.join(out_folder, out_filename)
 
