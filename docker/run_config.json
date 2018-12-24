@@ -1,0 +1,13 @@
+{
+    "name" : "distributed_extractor_docker_config",
+    "parallelism" : 12,
+    "homedir": "/home/repos/extractors/src/shell",
+    "seed": 1701,
+    "data_source": "spark",
+    "output_dir": "/output",
+    "max_docs": 1000000,
+    "use_pg": 1,
+    "dm_parallelism":12,
+    "postgres_db_name": "docker",
+    "postgres_location": "postgresql://docker:docker@localhost:5432"
+}
