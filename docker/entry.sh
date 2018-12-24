@@ -12,3 +12,5 @@ sudo /etc/init.d/postgresql restart
 echo "Running extractors"
 bash /home/repos/extractors/docker/run_extractors.sh /data/input.csv /home/repos/extractors/docker/run_config.json
 
+# COMPLETE!
+echo "Extraction complete"
