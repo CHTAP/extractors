@@ -2,6 +2,9 @@
 source activate chtap
 echo "Entry point activated!"
 
+echo "Moving to extractor working directory"
+cd /home/repos/extractors/docker
+
 echo "Pulling repo"
 git pull origin dist_exec_docker
 
