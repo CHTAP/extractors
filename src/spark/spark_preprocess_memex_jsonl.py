@@ -91,17 +91,20 @@ def dump_df_to_csv(df, cols_to_write):
 
 if __name__=="__main__":
     
-    # Starting spark session
+# Starting spark session
+# The driver/executor memory settings are important to not bugging out!
     spark = SparkSession \
     .builder \
     .master("local[*]") \
     .appName("Snorkel MEMEX Preprocessing") \
     .config("spark.cores.max", "96") \
+    .config("spark.executor.memory", '20g')\
+    .config("spark.driver.memory", '50g')\
     .getOrCreate()
 
     # Defining paths
-    data_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts/2016'
-    write_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts_preproc/spark_test/2016'
+    data_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts/1970'
+    write_path = '/lfs/local/0/jdunnmon/data/memex-data/escorts_preproc/spark_test/1970'
 
     # Getting list of attributes to extract
     attr_list = ['doc_id','type', 'raw_content','url',\
