@@ -8,7 +8,7 @@ CUDA_VISIBLE_DEVICES=0
 # Initializing database and moving to container home
 #echo "Creating Database: $DBNAME" 
 cd /home/repos/extractors/src/shell
-#sh ../src/utils/kill_db.sh ${DBNAME}; 
+sh ../src/utils/kill_db.sh ${DBNAME}; 
 
 # Activating environment
 source activate chtap 
