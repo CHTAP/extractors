@@ -3,15 +3,15 @@ import numpy as np
 
 import warnings
 
-from snorkel.learning.tensorflow.noise_aware_model import TFNoiseAwareModel
-from six.moves.cPickle import dump, load
-from time import time
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.utils.data as data_utils
 import torch.nn.functional as F
+
+from snorkel.learning.tensorflow.noise_aware_model import TFNoiseAwareModel
+from six.moves.cPickle import dump, load
+from time import time
 
 from snorkel.learning.utils import reshape_marginals, LabelBalancer
 
@@ -525,12 +525,12 @@ class LSTM(TFNoiseAwareModel):
         sigmoid = nn.Sigmoid()
 
         y = np.array([])
-
         x = torch.from_numpy(np.arange(len(X_w)))
         data_set = data_utils.TensorDataset(x, x)
-        data_loader = data_utils.DataLoader(data_set, batch_size=self.batch_size, shuffle=False)
+        data_loader = data_utils.DataLoader(data_set, batch_size=self.batch_size, shuffle=False, num_workers=0)
 
-        for x, _ in data_loader:
+        for ii, (x, _) in enumerate(data_loader):
+        #    print(f'Running batch {ii}...') 
             x_w, x_w_mask = pad_batch(X_w[x.numpy()], self.max_sentence_length)
             batch_size, max_sent = x_w.size()
             w_state_word = self.model.init_hidden(batch_size)
@@ -573,7 +573,7 @@ class LSTM(TFNoiseAwareModel):
         if verbose:
             print("[{0}] Model saved as <{1}>, only_param={2}".format(self.name, model_name, only_param))
 
-    def load(self, model_name=None, save_dir='checkpoints', verbose=True, only_param=False):
+    def load(self, model_name=None, save_dir='checkpoints', verbose=True, only_param=False, map_location=None, update_kwargs=None):
         """Load model from file and rebuild in new model"""
         model_name = model_name or self.name
         model_dir = os.path.join(save_dir, model_name)
@@ -582,6 +582,9 @@ class LSTM(TFNoiseAwareModel):
             # Load model kwargs needed to rebuild model
             with open(os.path.join(model_dir, "model_kwargs.pkl"), 'rb') as f:
                 model_kwargs = load(f)
+                if update_kwargs is not None:
+                   for k,v in update_kwargs.items():
+                       model_kwargs[k]=v
                 self._init_kwargs(**model_kwargs)
 
             if self.load_emb:
@@ -596,7 +599,10 @@ class LSTM(TFNoiseAwareModel):
                     d = load(f)
                     self.word_dict = d['word_dict']
 
-        self.model = torch.load(os.path.join(model_dir, model_name))
+        if map_location is None:
+            self.model = torch.load(os.path.join(model_dir, model_name))
+        else:
+            self.model = torch.load(os.path.join(model_dir, model_name), map_location=map_location)
 
         if verbose:
             print("[{0}] Loaded model <{1}>, only_param={2}".format(self.name, model_name, only_param))

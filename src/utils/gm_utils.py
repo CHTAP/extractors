@@ -1,11 +1,15 @@
 from collections import defaultdict
 import re
+import numpy as np
 from snorkel.lf_helpers import get_tagged_text
 import geograpy
 import googlemaps as gm
 from dataset_utils import city_index, phone_eval
 from operator import itemgetter
 from nltk.corpus import words
+from multiprocessing import Pool
+from functools import partial
+from itertools import chain
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR LABELING FUNCTIONS
@@ -62,6 +66,38 @@ def loc_extraction(text, cities, geocode_key=None):
     ext = [f'Extracted String: {text}']+list(ext)
     return ext
 
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield np.arange(i, i + n, 1)
+        
+def create_extractions_dict_parallel(session, cands, train_marginals, extractions, dummy=False, geocode_key=None, slices=1):
+    """
+    Parallelizing creating extractions dictionary
+    """
+    if slices == 1:
+        print("Using serial processing for extractions...")
+        doc_extractions = create_extractions_dict(session, cands, train_marginals, extractions, dummy=False, geocode_key=None)
+    else:
+        print("Using parallel processing for extractions...")
+        pool = Pool(slices)
+        sz = int(len(train_marginals)/slices)
+        marg_chunks = []
+        cand_chunks = []
+        for c in chunks(train_marginals, sz):
+            c = [a for a in c if a<len(train_marginals)]
+            cand_chunks.append([cands[a] for a in c])
+            marg_chunks.append([train_marginals[a] for a in c])
+        func = partial(create_extractions_dict, session=session, extractions=extractions, dummy=False, geocode_key=geocode_key)
+        doc_extractions_parallel = pool.map(func, cands=cand_chunks, train_marginals=marg_chunks)
+        doc_extractions = {}
+        for e in doc_extractions_parallel:
+            doc_extractions.update(e)
+        
+    return doc_extractions
+        
+    
+    
 def create_extractions_dict(session, cands, train_marginals, extractions, dummy=False, geocode_key=None):
     """
     Creating dictionary of extractions from label matrix and marginals.
@@ -73,7 +109,7 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
     bool dummy: include dummy extraction
     string geocode_key: Googlemaps api key
     """
-    
+    print("Starting extractions dictionary creation...")
     doc_extractions = {}
     num_train_cands = max(train_marginals.shape)
     train_cand_preds = (train_marginals>0.5)*2-1
@@ -81,6 +117,8 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
     cities = city_index('../utils/data/cities15000.txt')
     
     for ind in range(num_train_cands):
+        if ind % 1000 == 0:
+            print(f"Processing extraction {ind} of {num_train_cands}...")
         if type(cands) == list:
             cand = cands[ind]
         else:
@@ -108,8 +146,8 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
                 if extraction == 'location':
                     geocode = loc_extraction(ext, cities, geocode_key)
                     confidence = 1 if ext in url else 0
-                    if ext in words.words():
-                         confidence -= 1
+                    #if ext in words.words():
+                         #confidence -= 1
                     if not doc_extractions[doc_name].get(extraction):
                         doc_extractions[doc_name][extraction] = (geocode, confidence)
                     elif doc_extractions[doc_name][extraction][1] < confidence:

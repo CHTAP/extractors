@@ -25,7 +25,8 @@ from multiprocessing import Pool
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
-from snorkel.utils import ProgressBar
+#from snorkel.utils import ProgressBar
+from tqdm import tqdm
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR GOLD LABELING
@@ -136,12 +137,11 @@ class city_index(object):
     cities = defaultdict(set)
     
     def __init__(self, file_loc):
-        with open(file_loc, 'r') as file:
+        with open(file_loc, 'r', encoding='utf-8') as fl:
 
-            lines = list(file)
             cities = defaultdict(set)
 
-            for line in lines:
+            for line in fl:
                 columns = line.split('\t')
                 value = (columns[1], columns[10], columns[8], int(columns[14]), float(columns[4]), float(columns[5]))
                 
@@ -175,6 +175,85 @@ class city_index(object):
         country = span.title() in lookup_country_name(span)
 
         return city or state or country
+    
+    
+def set_price_data(span_input):
+    """
+    Sets common data used in price matchers
+    
+    temporary_span span_input: possible candidate to test
+    """
+    span = span_input.get_span().lower()
+    sent = span_input.sentence.text.lower()
+    right_sent = sent[span_input.char_end+1:][:15]
+    left_sent = sent[:span_input.char_start][-15:]
+ 
+    num_reg = re.compile(r'^(\d?\d[05])$')
+    hour_reg = re.compile(r'\Whr\W|\Whour\W|60 min|\Wh\W')    
+    half_reg = re.compile(r'half|hh|hlf|hhr|1\/2|30 min')
+    quick_reg = re.compile(r'qv')
+    
+    return span, sent, right_sent, left_sent, num_reg, hour_reg, half_reg, quick_reg
+
+def test_price_amount(num_reg, span, right_sent, left_sent):
+    """
+    Tests that candidate is a valid number that could be a price
+    
+    string num_reg: regex to test number
+    string right_sent: sentence chunk to the right of the candidate
+    string left_sent: sentence chunk to the left of the candidate
+    """
+    if not num_reg.search(span) or num_reg.search(span).group(0) == '00':
+        return False
+    
+    if right_sent[:1] == '-' or left_sent[-1:] == '-':
+        return False
+    
+    return True
+    
+def price_match_hour(span_input):
+    """
+    Uses regex to detect mentions of price
+    
+    string text: text to test for location
+    """    
+    span, sent, right_sent, left_sent, num_reg, hour_reg, half_reg, quick_reg = set_price_data(span_input)
+
+    if not test_price_amount(num_reg, span, right_sent, left_sent):
+        return False
+    
+    if half_reg.search(right_sent):
+        return False
+
+    if not hour_reg.search(right_sent):
+        return False
+    
+    if half_reg.search(left_sent) and num_reg.search(right_sent):
+        return False
+    
+    return True
+
+def price_match_half(span_input):
+    """
+    Uses regex to detect mentions of price
+    
+    string text: text to test for location
+    """    
+    span, sent, right_sent, left_sent, num_reg, hour_reg, half_reg, quick_reg = set_price_data(span_input)
+
+    if not test_price_amount(num_reg, span, right_sent, left_sent):
+        return False
+
+    if quick_reg.search(right_sent) or hour_reg.search(left_sent):
+        return False
+    
+    if not half_reg.search(right_sent):
+        return False
+    
+    if quick_reg.search(left_sent) and not num_reg.search(left_sent):
+        return False
+
+    return True
 
 ######################################################################################################
 ##### HELPER FUNCTIONS FOR PHONE	        
@@ -315,6 +394,38 @@ def clean_input(text):
 
     return text
 
+# def get_posting_html_fast(text, search_term):
+#     """
+#     Returns ad posting from html document in memex_raw_data
+    
+#     string text: memex_raw_data string
+#     term: regex of term to find
+#     """
+#     title_term = r'<[Tt]itle>(.*?)<\/[Tt]itle>'
+#     body_term = r'<div.{0,20}[Pp]ost.{0,20}>(.*?)<\/div>'
+#     body_term2 = r'<p>(.*?)<\/p>'
+
+#     title = re.search(title_term, text)
+#     html_lines = [clean_input(line) for line in (re.findall(body_term, text) + re.findall(body_term2, text))]
+# #    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+    
+#     if title and title.group(1):
+#         title = clean_input(title.group(1))
+#     else:
+#         title = '-1'
+        
+#     html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + ' <|> '
+#     for line in html_lines:
+#         if line:
+#             html_text += ' ' + line + ' <|> '
+# #    for line in search_lines:
+# #        if line:
+# #            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
+        
+#     html_text = fix_spacing(html_text)
+
+#     return html_text
+
 def get_posting_html_fast(text, search_term):
     """
     Returns ad posting from html document in memex_raw_data
@@ -322,29 +433,35 @@ def get_posting_html_fast(text, search_term):
     string text: memex_raw_data string
     term: regex of term to find
     """
-    title_term = r'<[Tt]itle>(.*?)<\/[Tt]itle>'
-    body_term = r'<div.{0,20}[Pp]ost.{0,20}>(.*?)<\/div>'
-    body_term2 = r'<p>(.*?)<\/p>'
+    title_term = r'<[Tt]itle>([\w\W]*?)</[Tt]itle>'
+    body_term = r'<div.{0,20}[Cc]ontent.{0,20}>([\w\W]*?)</div>'
+    body_term2 = r'<div.{0,20}[Pp]ost.{0,20}>([\w\W]*?)</div>'
+    body_term3 = r'<div.{0,20}[Tt]ext.{0,20}>([\w\W]*?)</div>'
+    body_term4 = r'<p>([\w\W]*?)</p>'
 
     title = re.search(title_term, text)
-    html_lines = [clean_input(line) for line in (re.findall(body_term, text) + re.findall(body_term2, text))]
-#    search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+    body_lines = re.findall(body_term, text) + re.findall(body_term2, text) + re.findall(body_term3, text) + re.findall(body_term4, text)
+    html_lines = [clean_input(line) for line in body_lines]
     
     if title and title.group(1):
         title = clean_input(title.group(1))
     else:
         title = '-1'
-        
+
     html_text = 'Title ' + title.replace('.', ' ').replace(':', ' ') + ' <|> '
+
     for line in html_lines:
         if line:
             html_text += ' ' + line + ' <|> '
-#    for line in search_lines:
-#        if line:
-#            html_text += ' Search' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
+
+    if search_term:
+        search_lines = [clean_input(line) for line in re.findall(search_term, text)]
+        for line in search_lines:
+            if line:
+                html_text += ' Search ' + line.replace('.', ' ').replace(':', ' ') + ' <|> '
         
     html_text = fix_spacing(html_text)
-
+    
     return html_text
 
 def get_posting_html(text, term):
@@ -671,7 +788,7 @@ class HTMLListPreprocessor(HTMLDocPreprocessor):
 class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_fields=['extracted_text'], term='', max_doc_length=0):
+                 content_fields=['extracted_text'], term='', max_doc_length=0, data_source='es'):
         #self.encoding = encoding
         #self.max_docs = max_docs
         self.path = path
@@ -680,6 +797,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         self.content_fields=content_fields
         self.term=term
         self.max_doc_length=max_doc_length
+        self.data_source=data_source
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         
     def _get_files(self,path_list):
@@ -687,7 +805,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         return fpaths
     
     def _can_read(self, fpath):
-        return fpath.endswith('tsv')
+        return fpath.endswith('tsv') or fpath.endswith('csv')
     
     def generate(self):
         """
@@ -711,11 +829,19 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
         with codecs.open(fp, encoding=self.encoding) as tsv:
             for ind, line in enumerate(tsv):
                 if ind == 0:
-                    continue
+                    fields = line.split('\t')
+                    num_fields = len(fields)
                 try:
                     # Loading data -- ignore malformatted entries!
                     # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                   # if num_fields == 21:
+                   #     (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    #elif num_fields == 8:
+                    if self.data_source=='spark':
+                        (doc_id, memex_doc_type, memex_url, memex_url_parsed, memex_raw_content, extracted_phone, extracted_age, extracted_rate, extracted_ethnicity, extracted_email, extracted_incall) = line.split('\t')
+                    elif self.data_source=='es':
+                        (doc_id, uuid, memex_id, memex_doc_type, memex_raw_content, memex_url, url, extractions) = line.split('\t')
+                    content = None
                 except:
                     print('Malformatted Line!')
                     continue
@@ -736,7 +862,6 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
 
                 doc_text = doc_text.strip()
                 doc_name = doc_id
-                source = content_type
                 extractions = extractions
                 
                 # Short documents are usually parsing errors...
@@ -758,9 +883,7 @@ class ParallelESTSVPreprocessor(HTMLDocPreprocessor):
                 # Yielding results, adding useful info to metadata
                 doc = Document(
                     name=doc_name, stable_id=stable_id,
-                    meta={'domain': domain,
-                          'source': source,
-                          'extractions':extractions,
+                    meta={'extractions':extractions,
                           'url':url}
                 )
                 yield doc, doc_text                    
@@ -769,28 +892,31 @@ class ESTSVDocPreprocessor(DocPreprocessor):
     """Simple parsing of TSV file drawn from Elasticsearch"""
     
     def __init__(self, path, encoding="utf-8", max_docs=float('inf'), verbose=False, clean_docs=False,
-                 content_fields=['extracted_text'], term='', max_doc_length=0):
+                 content_fields=['extracted_text'], term='', max_doc_length=0, data_source='es'):
         super().__init__(path, encoding=encoding, max_docs=max_docs)
         self.verbose = verbose
         self.clean_docs = clean_docs
         self.content_fields=content_fields
         self.term=term
         self.max_doc_length=max_doc_length
-        
+        self.data_source=data_source  
     def _get_files(self,path_list):
         fpaths = [fl for fl in path_list]
         return fpaths
     
     def _can_read(self, fpath):
-        return fpath.endswith('tsv')
+        return fpath.endswith('tsv') or fpath.endswith('csv')
     
     def generate(self):
         """
         Parses a file or directory of files into a set of Document objects.
         """
         doc_count = 0
-        file_list = os.listdir(self.path)
-        file_list = [os.path.join(self.path, fl) for fl in file_list]
+        if os.path.isfile(self.path):
+            file_list = [self.path]
+        else:
+            file_list = os.listdir(self.path)
+            file_list = [os.path.join(self.path, fl) for fl in file_list]
         for file_name in self._get_files(file_list):
             if self._can_read(file_name):
                 for doc, text in self.parse_file(file_name):
@@ -811,7 +937,11 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                 try:
                     # Loading data -- ignore malformatted entries!
                     # TODO: Make these fields dynamic/drawn from header? Or make field names an option?
-                    (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    if self.data_source=='spark':
+                        (doc_id, memex_doc_type, memex_url, memex_url_parsed, memex_raw_content, extracted_phone, extracted_age, extracted_rate, extracted_ethnicity, extracted_email, extracted_incall) = line.split('\t')
+                    elif self.data_source=='es':
+                        (doc_id, uuid, memex_id, memex_content_type, crawl_data, memex_crawler, memex_doc_type, memex_extracted_metadata, memex_extracted_text, memex_extractions, memex_raw_content, memex_team, memex_timestamp, memex_type, memex_url, memex_version, domain, content_type, url, content, extractions) = line.split('\t')
+                    content = None
                 except:
                     print('Malformatted Line!')
                     continue
@@ -823,17 +953,29 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     if 'raw_content' in self.content_fields:
                         memex_raw_content = get_posting_html_fast(memex_raw_content, self.term)
                 if 'url' in self.content_fields:
-                    memex_url = parse_url(memex_url)
+                    memex_url_parsed = parse_url(memex_url)
 
                 doc_text = ""
-                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url, }
+                field_names = {'extracted_text': content, 'raw_content': memex_raw_content, 'url': memex_url_parsed}
                 for field in self.content_fields:
                     doc_text += field_names[field] + " "
+                    doc_text = doc_text.strip()
+                    doc_name = doc_id
 
-                doc_text = doc_text.strip()
-                doc_name = doc_id
-                source = content_type
-                extractions = extractions
+                if self.data_source=='spark':
+                    source = memex_doc_type
+                    extractions = {
+                                   'phone': extracted_phone,
+                                   'age': extracted_age,
+                                   'rate': extracted_rate,
+                                   'ethnicity': extracted_ethnicity,
+                                   'email': extracted_email,
+                                   'incall': extracted_incall
+                               }
+                    domain=''
+                elif self.data_source=='es':
+                    source = content_type
+                    extractions = extractions
                 
                 # Short documents are usually parsing errors...
                 if len(doc_text) < 10:
@@ -857,7 +999,7 @@ class ESTSVDocPreprocessor(DocPreprocessor):
                     meta={'domain': domain,
                           'source': source,
                           'extractions':extractions,
-                          'url':url}
+                          'url':memex_url}
                 )
 
                 yield doc, doc_text
@@ -1102,11 +1244,11 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
         )
     
     # For Elasticsearch
-    elif data_source == 'es':
+    elif data_source == 'es' or 'spark':
     
         # Initializing document preprocessor
         
-        if '.tsv' in data_loc:
+        if '.tsv' in data_loc or '.csv' in data_loc:
             print('Using single-threaded loader')
             doc_preprocessor = ESTSVDocPreprocessor(
             path=data_loc,
@@ -1115,7 +1257,8 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
             clean_docs=clean_docs,
             content_fields=content_fields,
             term=term,
-            max_doc_length=max_doc_length
+            max_doc_length=max_doc_length,
+            data_source=data_source
         )
         else:
             print('Using parallelized loader')
@@ -1126,7 +1269,8 @@ def set_preprocessor(data_source,data_loc,max_docs=1000,verbose=False,clean_docs
             clean_docs=clean_docs,
             content_fields=content_fields,
             term=term,
-            max_doc_length=max_doc_length
+            max_doc_length=max_doc_length,
+            data_source=data_source
         )         
 
     # For MEMEX jsons -- loading from .jsonl.gz
@@ -1170,6 +1314,30 @@ def create_candidate_class(extraction_type):
         PriceExtraction = candidate_subclass('Price', ['price'])
         candidate_class = PriceExtraction
         candidate_class_name = 'PriceExtraction'
+        
+    if extraction_type == 'email':
+        # Designing candidate subclasses
+        PriceExtraction = candidate_subclass('Email', ['email'])
+        candidate_class = PriceExtraction
+        candidate_class_name = 'EmailExtraction'
+        
+    if extraction_type == 'age':
+        # Designing candidate subclasses
+        AgeExtraction = candidate_subclass('Age', ['age'])
+        candidate_class = AgeExtraction
+        candidate_class_name = 'AgeExtraction'
+        
+    if extraction_type == 'call':
+        # Designing candidate subclasses
+        CallExtraction = candidate_subclass('Call', ['call'])
+        candidate_class = CallExtraction
+        candidate_class_name = 'CallExtraction'
+        
+    if extraction_type == 'ethnicity':
+        # Designing candidate subclasses
+        EthnicityExtraction = candidate_subclass('Ethnicity', ['ethnicity'])
+        candidate_class = EthnicityExtraction
+        candidate_class_name = 'EthnicityExtraction'
     
     return candidate_class, candidate_class_name 
 
@@ -1275,8 +1443,8 @@ def get_gold_labels_from_meta(session, candidate_class, target, split, annotator
     candidates = session.query(candidate_class).filter(candidate_class.split == split).all()
     cand_total = len(candidates)
     print('Loading', cand_total, 'candidate labels')
-    pb = ProgressBar(cand_total)
-    
+    #pb = ProgressBar(cand_total)
+    pb=tdqdm(cand_total)
     # Tracking number of labels
     labels=0
     
