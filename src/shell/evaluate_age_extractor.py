@@ -53,14 +53,6 @@ seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
     
-# Setting extraction type -- should be a subfield in your data source extractions field!
-from dataset_utils import create_candidate_class
-extraction_type = 'age'
-extraction_name = extraction_type
-    
-# Creating candidate class
-#candidate_class, candidate_class_name = create_candidate_class(extraction_type)
-
 # Printing number of docs/sentences
 from fonduer.parser.models import Document, Sentence
 print("==============================")
@@ -98,10 +90,10 @@ mention_extractor = MentionExtractor(
     )
 mention_extractor.apply(docs, parallelism=parallelism)
 candidate_class = candidate_subclass("Age", [AgeMention])
-candidate_extractor = CandidateExtractor(session, candidate_class)
+candidate_extractor = CandidateExtractor(session, [candidate_class])
 
 # Applying candidate extractors
-cand_extractor.apply(docs, split=0, parallelism=parallelism)
+candidate_extractor.apply(docs, split=0, parallelism=parallelism)
 print("==============================")
 print(f"Candidate extraction results for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())

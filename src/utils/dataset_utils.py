@@ -22,6 +22,10 @@ import geograpy
 from collections import defaultdict
 from multiprocessing import Pool
 
+#from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
+#from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
+#from snorkel.matchers import RegexMatchEach
+
 from fonduer.parser.preprocessors.doc_preprocessor import DocPreprocessor
 from fonduer.parser.preprocessors.html_doc_preprocessor import HTMLDocPreprocessor
 from fonduer.parser.models import Document, Sentence
@@ -29,6 +33,12 @@ from fonduer.candidates.models import Candidate
 from fonduer.candidates.models import candidate_subclass
 from fonduer.supervision.models.label import GoldLabel, GoldLabelKey
 from fonduer.candidates.matchers import RegexMatchEach
+
+#from fonduer.parser.models import Document, Sentence
+#from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
+#from snorkel.models import  candidate_subclass
+#from snorkel.matchers import RegexMatchEach
+
 from tqdm import tqdm
 
 ######################################################################################################
@@ -1326,7 +1336,7 @@ def create_candidate_class(extraction_type):
         
     if extraction_type == 'age':
         # Designing candidate subclasses
-        AgeExtraction = candidate_subclass('Age', [Sentence])
+        AgeExtraction = candidate_subclass('Age', ['age'])
         candidate_class = AgeExtraction
         candidate_class_name = 'AgeExtraction'
         
