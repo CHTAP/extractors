@@ -7,7 +7,7 @@ else
   echo "killing all connections to database"
 fi
 
-cat <<-EOF | psql -U jdunnmon -d postgres 
+cat <<-EOF | psql -U docker -d docker
 SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
 ${where}

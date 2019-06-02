@@ -40,13 +40,12 @@ if config['use_pg']:
 else:
     print('Using SQLite...')
 
-# Start Snorkel session
-from snorkel import SnorkelSession
-session = SnorkelSession()
+from fonduer import Meta
+# Start DB connection
+conn_string = os.path.join(config['postgres_location'],config['postgres_db_name'])
+session = Meta.init(conn_string).Session()
 
-#import torch first to stop TLS error
-from dm_utils import LSTM
-
+# Setting parallelism
 parallelism = config['parallelism']
 
 # Setting random seed
@@ -63,7 +62,7 @@ extraction_name = extraction_type
 candidate_class, candidate_class_name = create_candidate_class(extraction_type)
 
 # Printing number of docs/sentences
-from snorkel.models import Document, Sentence
+from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print(f'Number of documents: {session.query(Document).count()}')
@@ -75,10 +74,10 @@ print("Getting documents and sentences...")
 docs = session.query(Document).all()
 sents = session.query(Sentence).all()
 
-from snorkel.candidates import Ngrams
-from snorkel.candidates import CandidateExtractor
+from fonduer.candidates.mentions import Ngrams
+from fonduer.candidates.candidates import CandidateExtractor
 from dataset_utils import create_candidate_class
-from snorkel.matchers import RegexMatchSpan, Union
+from fonduer.candidates.matchers import RegexMatchSpan, Union
 
 # Defining ngrams for candidates
 age_ngrams = Ngrams(n_max=3)
