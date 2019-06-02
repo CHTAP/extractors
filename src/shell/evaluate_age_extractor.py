@@ -59,7 +59,7 @@ extraction_type = 'age'
 extraction_name = extraction_type
     
 # Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
+#candidate_class, candidate_class_name = create_candidate_class(extraction_type)
 
 # Printing number of docs/sentences
 from fonduer.parser.models import Document, Sentence
@@ -74,13 +74,12 @@ print("Getting documents and sentences...")
 docs = session.query(Document).all()
 sents = session.query(Sentence).all()
 
-from fonduer.candidates.mentions import Ngrams
-from fonduer.candidates.candidates import CandidateExtractor
-from dataset_utils import create_candidate_class
+from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
+from fonduer.candidates.models import mention_subclass, candidate_subclass
 from fonduer.candidates.matchers import RegexMatchSpan, Union
 
 # Defining ngrams for candidates
-age_ngrams = Ngrams(n_max=3)
+age_ngrams = MentionNgrams(n_max=3)
 
 # Define matchers
 m = RegexMatchSpan(rgx = r'.*(I|He|She) (is|am) ^([0-9]{2})*')
@@ -91,10 +90,18 @@ s = RegexMatchSpan(rgx = r'(^|\W)age\W{0,4}[1-9]\d(\W|$)')
 
 # Union matchers and create candidate extractor
 age_matchers = Union(m,p,r,q, s)
-cand_extractor = CandidateExtractor(candidate_class, [age_ngrams], [age_matchers])
+
+# Getting candidates
+AgeMention = mention_subclass("AgeMention")
+mention_extractor = MentionExtractor(
+        session, [AgeMention], [age_ngrams], [age_matchers]
+    )
+mention_extractor.apply(docs, parallelism=parallelism)
+candidate_class = candidate_subclass("Age", [AgeMention])
+candidate_extractor = CandidateExtractor(session, candidate_class)
 
 # Applying candidate extractors
-cand_extractor.apply(sents, split=0, parallelism=parallelism)
+cand_extractor.apply(docs, split=0, parallelism=parallelism)
 print("==============================")
 print(f"Candidate extraction results for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())
