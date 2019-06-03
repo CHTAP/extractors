@@ -71,6 +71,7 @@ from fonduer.candidates.models import mention_subclass, candidate_subclass
 from fonduer.candidates.matchers import RegexMatchSpan, Union
 
 # Defining ngrams for candidates
+extraction_name = "age"
 age_ngrams = MentionNgrams(n_max=3)
 
 # Define matchers
@@ -88,6 +89,7 @@ AgeMention = mention_subclass("AgeMention")
 mention_extractor = MentionExtractor(
         session, [AgeMention], [age_ngrams], [age_matchers]
     )
+mention_extractor.clear_all()
 mention_extractor.apply(docs, parallelism=parallelism)
 candidate_class = candidate_subclass("Age", [AgeMention])
 candidate_extractor = CandidateExtractor(session, [candidate_class])
@@ -107,8 +109,8 @@ eval_cands = session.query(candidate_class).order_by(candidate_class.id).all()
 print(f'Loaded {len(eval_cands)} candidates...')
 
 # Getting spans and doc_ids
-spans = [cand.age.get_span() for cand in eval_cands]
-doc_ids = [cand.get_parent().get_parent().name for cand in eval_cands]
+spans = [cand.age_mention.context.get_span() for cand in eval_cands]
+doc_ids = [cand.age_mention.document.name for cand in eval_cands]
 
 # Applying regex
 print('Applying filtering regex...')

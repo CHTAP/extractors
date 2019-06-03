@@ -9,7 +9,8 @@ echo "Pulling repo"
 git pull origin dist_exec_docker
 
 echo "Starting postgres"
-sudo /etc/init.d/postgresql restart
+sudo pg_createcluster 11 main
+sudo /etc/init.d/postgresql start
 
 # PUT CODE HERE FOR RUNNING EXTRACTORS!
 for entry in "/data"/*
