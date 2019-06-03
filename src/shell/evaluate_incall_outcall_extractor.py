@@ -41,9 +41,10 @@ if config['use_pg']:
 else:
     print('Using SQLite...')
 
-# Start Snorkel session
-from snorkel import SnorkelSession
-session = SnorkelSession()
+from fonduer import Meta
+# Start DB connection
+conn_string = os.path.join(config['postgres_location'],config['postgres_db_name'])
+session = Meta.init(conn_string).Session()
 
 # Parallelism
 parallelism = config['parallelism']
@@ -53,16 +54,8 @@ seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
     
-# Setting extraction type -- should be a subfield in your data source extractions field!
-from dataset_utils import create_candidate_class
-extraction_type = 'call'
-extraction_name = extraction_type
-    
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
-
 # Printing number of docs/sentences
-from snorkel.models import Document, Sentence
+from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print(f'Number of documents: {session.query(Document).count()}')
@@ -74,23 +67,31 @@ print("Getting documents and sentences...")
 docs = session.query(Document).all()
 sents = session.query(Sentence).all()
 
-from snorkel.candidates import Ngrams
-from snorkel.candidates import CandidateExtractor
-from dataset_utils import create_candidate_class
-from snorkel.matchers import RegexMatchSpan, Union
+from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
+from fonduer.candidates.models import mention_subclass, candidate_subclass
+from fonduer.candidates.matchers import RegexMatchSpan, Union
 
 # Defining ngrams for candidates
-ngrams = Ngrams(n_max=1)
+extraction_name = 'call'
+ngrams = MentionNgrams(n_max=1)
 
 # Define matchers
 regex_matcher_1=RegexMatchSpan(rgx = r'(incalls?|outcalls?|incalls?outcalls?|in calls?|out calls?)')
 
 # Union matchers and create candidate extractor
-matcher = regex_matcher_1
-cand_extractor = CandidateExtractor(candidate_class, [ngrams], [matcher])
+matchers = regex_matcher_1
+# Getting candidates
+CallMention = mention_subclass("CallMention")
+mention_extractor = MentionExtractor(
+        session, [CallMention], [ngrams], [matchers]
+    )
+mention_extractor.clear_all()
+mention_extractor.apply(docs, parallelism=parallelism)
+candidate_class = candidate_subclass("Call", [CallMention])
+candidate_extractor = CandidateExtractor(session, [candidate_class])
 
 # Applying candidate extractors
-cand_extractor.apply(sents, split=0, parallelism=parallelism)
+candidate_extractor.apply(docs, split=0, parallelism=parallelism)
 print("==============================")
 print(f"Candidate extraction results for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())
@@ -104,8 +105,8 @@ eval_cands = session.query(candidate_class).order_by(candidate_class.id).all()
 print(f'Loaded {len(eval_cands)} candidates...')
 
 # Getting spans and doc_ids
-spans = [cand.call.get_span() for cand in eval_cands]
-doc_ids = [cand.get_parent().get_parent().name for cand in eval_cands]
+spans = [cand.call_mention.context.get_span() for cand in eval_cands]
+doc_ids = [cand.call_mention.document.name for cand in eval_cands]
 
 # Applying regex
 print('Applying filtering regex...')
