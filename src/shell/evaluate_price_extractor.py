@@ -43,12 +43,11 @@ if config['use_pg']:
 else:
     print('Using SQLite...')
 
-# Start Snorkel session
-from snorkel import SnorkelSession
-session = SnorkelSession()
 
-#import torch first to stop TLS error
-from dm_utils import LSTM
+from fonduer import Meta
+# Start DB connection
+conn_string = os.path.join(config['postgres_location'],config['postgres_db_name'])
+session = Meta.init(conn_string).Session()
 
 # Setting parallelism
 parallelism = config['parallelism']
@@ -58,20 +57,9 @@ seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
     
-# Setting extraction type -- should be a subfield in your data source extractions field!
-from dataset_utils import create_candidate_class
-extraction_type = 'price'
-
-if args['name'] == 'hour':
-    extraction_name = extraction_type+'_per_hour'
-elif args['name'] == 'half_hour':
-    extraction_name = extraction_type+'_per_half_hour'
-    
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
 
 # Printing number of docs/sentences
-from snorkel.models import Document, Sentence
+from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print(f'Number of documents: {session.query(Document).count()}')
@@ -81,15 +69,19 @@ print("==============================")
 # Getting all documents parsed by Snorkel
 print("Getting documents and sentences...")
 docs = session.query(Document).all()
-sents = session.query(Sentence).all()
+#sents = session.query(Sentence).all()
 
-from snorkel.candidates import Ngrams
-from snorkel.candidates import CandidateExtractor
-from dataset_utils import create_candidate_class, price_match_hour, price_match_half
-from snorkel.matchers import LambdaFunctionMatcher
+from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
+from fonduer.candidates.models import mention_subclass, candidate_subclass
+from dataset_utils import price_match_hour, price_match_half
+from fonduer.candidates.matchers import LambdaFunctionMatcher
 
 # Defining ngrams for candidates
-price_ngrams = Ngrams(n_max=1)
+if args['name'] == 'hour':
+    extraction_name = 'price_per_hour'
+elif args['name'] == 'half_hour':
+    extraction_name = 'price_per_half_hour'
+ngrams = MentionNgrams(n_max=1)
 
 # Define matchers
 if args['name'] == 'hour':
@@ -97,11 +89,21 @@ if args['name'] == 'hour':
 elif args['name'] == 'half_hour':
     price_matcher = LambdaFunctionMatcher(func=price_match_half)
 
-# Union matchers and create candidate extractor
-cand_extractor = CandidateExtractor(candidate_class, [price_ngrams], [price_matcher])
+matchers = price_matcher
+
+# Getting candidates
+PriceMention = mention_subclass("PriceMention")
+mention_extractor = MentionExtractor(
+        session, [PriceMention], [ngrams], [matchers]
+    )
+mention_extractor.clear_all()
+mention_extractor.apply(docs, parallelism=parallelism)
+candidate_class = candidate_subclass("Price", [PriceMention])
+candidate_extractor = CandidateExtractor(session, [candidate_class])
+
 
 # Applying candidate extractors
-cand_extractor.apply(sents, split=0, parallelism=parallelism)
+candidate_extractor.apply(docs, split=0, parallelism=parallelism)
 print("==============================")
 print(f"Candidate extraction results for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())
@@ -115,8 +117,8 @@ eval_cands = session.query(candidate_class).order_by(candidate_class.id).all()
 print(f'Loaded {len(eval_cands)} candidates...')
 
 # Getting spans and doc_ids
-spans = [cand.price.get_span() for cand in eval_cands]
-doc_ids = [cand.get_parent().get_parent().name for cand in eval_cands]
+spans = [cand.price_mention.context.get_span() for cand in eval_cands]
+doc_ids = [cand.price_mention.document.name for cand in eval_cands]
 
 # Applying regex
 print('Applying filtering regex...')

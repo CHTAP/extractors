@@ -41,12 +41,10 @@ if config['use_pg']:
 else:
     print('Using SQLite...')
 
-# Start Snorkel session
-from snorkel import SnorkelSession
-session = SnorkelSession()
-
-#import torch first to stop TLS error
-from dm_utils import LSTM
+from fonduer import Meta
+# Start DB connection
+conn_string = os.path.join(config['postgres_location'],config['postgres_db_name'])
+session = Meta.init(conn_string).Session()
 
 # Setting parallelism
 parallelism = config['parallelism']
@@ -57,7 +55,7 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Printing number of docs/sentences
-from snorkel.models import Document, Sentence
+from fonduer.parser.models import Document, Sentence
 # Printing number of docs/sentences
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
@@ -68,30 +66,32 @@ print("==============================")
 # Getting all documents parsed by Snorkel
 print("Getting documents and sentences...")
 docs = session.query(Document).all()
-sents = session.query(Sentence).all()
+#sents = session.query(Sentence).all()
 
-from snorkel.candidates import Ngrams
-from snorkel.candidates import CandidateExtractor
-from dataset_utils import create_candidate_class, price_match
-from snorkel.matchers import LambdaFunctionMatcher
-
-# Setting extraction type -- should be a subfield in your data source extractions field!
-extraction_type = 'price'
-
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
+from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
+from fonduer.candidates.models import mention_subclass, candidate_subclass
+from fonduer.candidates.matchers import RegexMatchSpan, Union, LambdaFunctionMatcher
+from dataset_utils import price_match
 
 # Defining ngrams for candidates
-price_ngrams = Ngrams(n_max=5)
+extraction_name = 'price'
+ngrams = MentionNgrams(n_max=5)
 
 # Define matchers
-price_matcher = LambdaFunctionMatcher(func=price_match)
+matchers = LambdaFunctionMatcher(func=price_match)
 
-# Union matchers and create candidate extractor
-cand_extractor = CandidateExtractor(candidate_class, [price_ngrams], [price_matcher])
+# Getting candidates
+PriceMention = mention_subclass("PriceMention")
+mention_extractor = MentionExtractor(
+        session, [PriceMention], [ngrams], [matchers]
+    )
+mention_extractor.clear_all()
+mention_extractor.apply(docs, parallelism=parallelism)
+candidate_class = candidate_subclass("Price", [PriceMention])
+candidate_extractor = CandidateExtractor(session, [candidate_class])
 
 # Applying candidate extractors
-cand_extractor.apply(sents, split=0, parallelism=parallelism)
+candidate_extractor.apply(docs, split=0, parallelism=parallelism)
 print("==============================")
 print(f"Candidate extraction results for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())
