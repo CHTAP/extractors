@@ -55,3 +55,7 @@ echo "Running price per hour extractor..."
 python evaluate_price_extractor.py -f ${INFILE} -c $CONFIG -n hour
 echo "Price extractor complete!"
 
+# Running postfix
+echo "Cleaning up and setting permissions..."
+python run_postfix.py -f ${INFILE} -c $CONFIG
+echo "Script complete!"
