@@ -27,7 +27,7 @@ for fl in sorted(os.listdir(args.input)):
             jbs+=1
         else:
             print('Already done, skipping...')
-        if jbs >10:
+        if jbs >5:
             break
     else:
         pass
