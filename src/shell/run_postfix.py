@@ -7,7 +7,6 @@ parser.add_argument('--file','-f',type=str, required=True)
 parser.add_argument('--config','-c',type=str,
                     default='/dfs/scratch1/jdunnmon/data/memex-data/config/config.json')
 
-parser.add_argument('--name','-n',type=str, required=True)
 args = parser.parse_args()
 args = vars(args)
 
