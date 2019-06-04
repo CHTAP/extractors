@@ -8,7 +8,7 @@ CUDA_VISIBLE_DEVICES=0
 # Initializing database and moving to container home
 #echo "Creating Database: $DBNAME" 
 cd /home/repos/extractors/src/shell
-sh ../src/utils/kill_db.sh ${DBNAME}; 
+#sh ../src/utils/kill_db.sh ${DBNAME}; 
 
 # Activating environment
 source activate chtap 
@@ -52,7 +52,6 @@ echo "Location extractor complete!"
 
 #Running price extractor
 echo "Running price per hour extractor..."
-python extract_price_candidates.py -f ${INFILE} -c $CONFIG
 python evaluate_price_extractor.py -f ${INFILE} -c $CONFIG -n hour
 echo "Price extractor complete!"
 
