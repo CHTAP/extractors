@@ -35,7 +35,7 @@ for flpth in sorted(files):
             jbs+=1
         else:
             print('Already done, skipping...')
-        if jbs >1:
+        if jbs >0:
             break
     else:
         pass
