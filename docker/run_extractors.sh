@@ -56,6 +56,6 @@ echo "Running price per hour extractor..."
 echo "Price extractor complete!"
 
 # Running postfix
-echo "Cleaning up and setting permissions..."
-python run_postfix.py -f ${INFILE} -c $CONFIG
+#echo "Cleaning up and setting permissions..."
+#python run_postfix.py -f ${INFILE} -c $CONFIG
 echo "Script complete!"
