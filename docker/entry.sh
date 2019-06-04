@@ -12,6 +12,10 @@ echo "Starting postgres"
 sudo pg_createcluster 11 main
 sudo /etc/init.d/postgresql start
 
+echo "Creating user"
+sudo -u postgres -H -- psql -c "CREATE USER docker WITH PASSWORD 'docker'; ALTER USER docker WITH SUPERUSER;"
+sudo -u postgres -H -- psql -c "CREATE DATABASE docker;"
+
 # PUT CODE HERE FOR RUNNING EXTRACTORS!
 for entry in "/data"/*
 do
