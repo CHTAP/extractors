@@ -6,7 +6,8 @@ echo "Moving to extractor working directory"
 cd /home/repos/extractors/docker
 
 echo "Pulling repo"
-git pull origin dist_exec_docker
+git pull
+git checkout 1f0c9b13cba83c73a1b9dec0e415c1fbec743373
 
 echo "Starting postgres"
 sudo pg_createcluster 11 main
