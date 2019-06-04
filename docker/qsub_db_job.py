@@ -16,10 +16,17 @@ if not os.path.exists(args.logdir):
     print("Logs saved to {}".format(args.logdir))
 
 jbs = 0
-for fl in sorted(os.listdir(args.input)):
-    if fl.endswith('-db'):
+
+files = [os.path.join(root, name)
+             for root, dirs, files in os.walk(args.input)
+             for name in files
+             if name.endswith("-db")]
+
+for flpth in sorted(files):
+    if flpth.endswith('-db'):
+        fl = os.path.split(flpth)[-1]
         respath = os.path.join(args.outdir,'price_per_hour','price_per_hour_extraction_'+fl+'.jsonl')
-        flpth = os.path.join(args.input,fl)
+        flpth = flpth
         if True:
         #if not os.path.exists(respath):
             cmd = "qsub -V -b y -r y -N job-{} -wd {} 'sh /dfs/scratch0/jdunnmon/chtap/extractors/docker/run_extractors_docker_local_dfs_fonduer.sh {} {}'".format(fl, args.logdir, flpth, args.outdir)
