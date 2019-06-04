@@ -61,7 +61,7 @@ from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print("Documents:", session.query(Document).count())
-print("Sentences:", session.query(Sentence).count())
+#print("Sentences:", session.query(Sentence).count())
 print("==============================")
 
 # Getting all documents parsed by Snorkel

@@ -48,5 +48,5 @@ from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB creation results for {config['postgres_db_name']}:")
 print("Documents:", session.query(Document).count())
-print("Sentences:", session.query(Sentence).count())
+#print("Sentences:", session.query(Sentence).count())
 print("==============================")

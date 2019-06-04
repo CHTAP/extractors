@@ -58,13 +58,13 @@ from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print(f'Number of documents: {session.query(Document).count()}')
-print(f'Number of sentences: {session.query(Sentence).count()}')
+#print(f'Number of sentences: {session.query(Sentence).count()}')
 print("==============================")
 
 # Getting all documents parsed by Snorkel
 print("Getting documents and sentences...")
 docs = session.query(Document).all()
-sents = session.query(Sentence).all()
+#sents = session.query(Sentence).all()
 
 from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
 from fonduer.candidates.models import mention_subclass, candidate_subclass
