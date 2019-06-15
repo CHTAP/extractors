@@ -6,8 +6,8 @@ FILENAME=$(basename $FILE)
 #chmod 666 /var/run/docker.sock
 
 #systemctl start docker
-docker container prune
-docker volume prune
+#docker container prune
+#docker volume prune
 docker pull jdunnmon/chtap-manual:06-02-2019-postgres11
 
 
