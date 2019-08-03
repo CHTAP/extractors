@@ -5,7 +5,7 @@ parser.add_argument('--input', required=True,
                     help='directory containing pre-parsed DBs')
 parser.add_argument('--logdir', required=True, help='default log path')
 parser.add_argument('--outdir', required=True, help='default output path')
-parser.add_argument('--check', default=None)
+parser.add_argument('--check', type=str, default=None)
 args = parser.parse_args()
 
 if not os.path.exists(args.outdir):
@@ -27,13 +27,14 @@ for flpth in sorted(files):
     if flpth.endswith('-db'):
         fl = os.path.split(flpth)[-1]
         if args.check is not None:
-            respath = os.path.join(args.outdir,'args.check',f'{args.check}_extraction_'+fl+'.jsonl')
+            respath = os.path.join(args.outdir,f'{args.check}',f'{args.check}_extraction_'+fl+'.jsonl')
         else:
             respath = '3!@#$%^^' #dummy path which will never be found
         #respath = os.path.join(args.outdir,'phone','phone_extraction_'+fl+'.jsonl')
         flpth = flpth
-        if not os.path.exists(respath):
+        if not (os.path.exists(respath)) or (os.path.getsize(respath)==0):
             cmd = "qsub -V -b y -r y -N job-{} -wd {} 'sh /dfs/scratch0/jdunnmon/chtap/extractors/docker/run_extractors_docker_local_dfs_fonduer.sh {} {}'".format(fl, args.logdir, flpth, args.outdir)
+            #print(cmd)
             os.system(cmd)
             jbs+=1
         else:
