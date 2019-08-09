@@ -130,7 +130,7 @@ else
 fi
 
 #Running price extractor
-if contains "${EXTRACTORS}" "price"; then
+if contains "${EXTRACTORS}" "price_per_hour"; then
     echo "Running price per hour extractor..."
     python extract_price_candidates.py -f ${INFILE} -c $CONFIG
     python evaluate_price_extractor.py -f ${INFILE} -c $CONFIG -n hour

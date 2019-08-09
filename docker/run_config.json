@@ -8,5 +8,5 @@
     "dm_parallelism":12,
     "postgres_db_name": "docker",
     "postgres_location": "postgresql://docker:docker@localhost:5432",
-    "extractors_to_run": "create_db,count,date,time,domain"
+    "extractors_to_run": "create_db,price_per_hour"
 }
