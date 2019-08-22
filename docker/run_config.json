@@ -1,12 +1,14 @@
 {
     "name" : "distributed_extractor_docker_config",
     "parallelism" : 12,
-    "homedir": "/home/repos/extractors/src/shell",
+    "homedir": "/code/src/shell",
     "seed": 1701,
     "output_dir": "/output",
     "use_pg": 1,
     "dm_parallelism":12,
     "postgres_db_name": "docker",
     "postgres_location": "postgresql://docker:docker@localhost:5432",
-    "extractors_to_run": "create_db,price_per_hour"
+    "extractors_to_run": "create_db,prediction",
+    "embed_dim": 100,
+    "prediction_model_path": "../../model_checkpoints/prediction/2015_v2_charCNN"
 }

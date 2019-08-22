@@ -121,7 +121,7 @@ else
 fi
 
 # Running incall outcall extractor
-if contains "${EXTRACTORS}" "incall_outcall"; then
+if contains "${EXTRACTORS}" "call"; then
     echo "Running incall outcall extractor..."
     python evaluate_incall_outcall_extractor.py -f ${INFILE} -c $CONFIG
     echo "Incall outcall extractor complete!"
@@ -137,6 +137,14 @@ if contains "${EXTRACTORS}" "price_per_hour"; then
     echo "Price extractor complete!"
 else
     echo "Skipping price extractor..."
+fi
+
+if contains "${EXTRACTORS}" "prediction"; then
+    echo "Running prediction..."
+    python evaluate_prediction_extractor.py -f ${INFILE} -c $CONFIG
+    echo "Prediction extractor complete!"
+else
+    echo "Skipping prediction extractor..."
 fi
 
 # End message
