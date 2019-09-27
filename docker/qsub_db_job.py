@@ -26,16 +26,17 @@ for flpth in sorted(files):
     if flpth.endswith('-db'):
         fl = os.path.split(flpth)[-1]
         #respath = os.path.join(args.outdir,'price_per_hour','price_per_hour_extraction_'+fl+'.jsonl')
-        respath = os.path.join(args.outdir,'phone','phone_extraction_'+fl+'.jsonl')
+        vr = 'call'
+        respath = os.path.join(args.outdir,vr,f'{vr}_extraction_'+fl+'.jsonl')
         flpth = flpth
         #if True:
         if not os.path.exists(respath):
-            cmd = "qsub -V -b y -r y -N job-{} -wd {} 'sh /dfs/scratch0/jdunnmon/chtap/extractors/docker/run_extractors_docker_local_dfs_fonduer.sh {} {}'".format(fl, args.logdir, flpth, args.outdir)
+            cmd = "qsub -V -b y -r y -N job-{} -wd {} 'sh /dfs/scratch0/jdunnmon/chtap/extractors/docker/run_extractors_docker_local_dfs_fonduer_ind.sh {} {}'".format(fl, args.logdir, flpth, args.outdir)
             os.system(cmd)
             jbs+=1
         else:
             print('Already done, skipping...')
-        #if jbs >0:
+        #if jbs >1:
         #    break
     else:
         pass
