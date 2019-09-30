@@ -83,6 +83,8 @@ Meta.reset()
 #config_emm = parse_arg_to_config(args_emm)   
 emmental.init(config={'model_path':f"{config['prediction_model_path']}/checkpoint.pth"})
 
+Meta.config["model_config"]["model_path"] = f"{config['prediction_model_path']}/checkpoint.pth"
+
 # Defining tasks
 task_names = ["ht_page"]
     
