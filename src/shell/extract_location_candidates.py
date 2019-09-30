@@ -83,16 +83,17 @@ ngrams = MentionNgrams(n_max=3)
 cities = city_index('../utils/data/cities15000.txt')
 geo_location_matcher = LambdaFunctionMatcher(func=cities.fast_loc)
 
-def post_matcher_fun(m):
-    term = r"([Ll]ocation:[\w\W]{1,200}</.{0,20}>|\W[cC]ity:[\w\W]{1,200}</.{0,20}>|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)"
-    if m in get_posting_html_fast(m.get_context().text, term):
-        return True
-    else:
-        return False
-post_matcher = LambdaFunctionMatcher(func=post_matcher_fun)
+#def post_matcher_fun(m):
+#    term = r"([Ll]ocation:[\w\W]{1,200}</.{0,20}>|\W[cC]ity:[\w\W]{1,200}</.{0,20}>|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)"
+#    if m in get_posting_html_fast(m.get_context().text, term):
+#        return True
+#    else:
+#        return False
+#post_matcher = LambdaFunctionMatcher(func=post_matcher_fun)
 
 #spacy_location_matcher = LocationMatcher(longest_match_only=True)
-matchers = Union(geo_location_matcher, post_matcher)
+#matchers = Union(geo_location_matcher, post_matcher)
+matchers = Union(geo_location_matcher)
 
 # Union matchers and create candidate extractor
 print("Extracting candidates...")
