@@ -4,9 +4,11 @@ import sys
 import random
 import numpy as np
 import json
+import pickle
 
 # Adding path for utils
 sys.path.append('../utils')
+from emmental_utils import load_data_from_db
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -72,7 +74,7 @@ docs = session.query(Document).all()
 from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
 from fonduer.candidates.models import mention_subclass, candidate_subclass
 from dataset_utils import LocationMatcher, city_index
-from fonduer.candidates.matchers import Union, LambdaFunctionMatcher
+from fonduer.candidates.matchers import Union, LambdaFunctionMatcher, Intersect
 from emmental_utils import get_posting_html_fast
     
 # Defining ngrams for candidates
@@ -80,20 +82,29 @@ extraction_name = 'location'
 ngrams = MentionNgrams(n_max=3)
 
 # Define matchers
+# Geolocation matcher
 cities = city_index('../utils/data/cities15000.txt')
 geo_location_matcher = LambdaFunctionMatcher(func=cities.fast_loc)
 
-#def post_matcher_fun(m):
-#    term = r"([Ll]ocation:[\w\W]{1,200}</.{0,20}>|\W[cC]ity:[\w\W]{1,200}</.{0,20}>|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)"
-#    if m in get_posting_html_fast(m.get_context().text, term):
-#        return True
-#    else:
-#        return False
-#post_matcher = LambdaFunctionMatcher(func=post_matcher_fun)
+# In raw text matcher
+with open(f"{config['prediction_model_path']}/char_dict.pkl",'rb') as fl:
+    char_dict = pickle.load(fl)
+dataset = load_data_from_db(postgres_db_name, config['postgres_location'], {},char_dict=char_dict, clobber_label=True)
+text_dict = {a[0]['uid']: a[0]['text'] for a in dataset}
+
+def post_matcher_fun(m):
+    term = r"([Ll]ocation:[\w\W]{1,200}</.{0,20}>|\W[cC]ity:[\w\W]{1,200}</.{0,20}>|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)"
+    #if m.get_span() in get_posting_html_fast(m.sentence.document.text, term):
+    if m.get_span() in text_dict[m.sentence.document.name]:
+        return True
+    else:
+        return False
+
+post_matcher = LambdaFunctionMatcher(func=post_matcher_fun)
 
 #spacy_location_matcher = LocationMatcher(longest_match_only=True)
 #matchers = Union(geo_location_matcher, post_matcher)
-matchers = Union(geo_location_matcher)
+matchers = Intersect(geo_location_matcher, post_matcher)
 
 # Union matchers and create candidate extractor
 print("Extracting candidates...")
