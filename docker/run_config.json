@@ -8,7 +8,7 @@
     "dm_parallelism":12,
     "postgres_db_name": "docker",
     "postgres_location": "postgresql://docker:docker@localhost:5432",
-    "extractors_to_run": "create_db,prediction",
+    "extractors_to_run": "create_db,location",
     "embed_dim": 100,
     "prediction_model_path": "../../model_checkpoints/prediction/2015_v2_charCNN_with_char_dict"
 }

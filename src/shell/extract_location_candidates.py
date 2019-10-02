@@ -103,7 +103,7 @@ def post_matcher_fun(m):
 post_matcher = LambdaFunctionMatcher(func=post_matcher_fun)
 
 #spacy_location_matcher = LocationMatcher(longest_match_only=True)
-#matchers = Union(geo_location_matcher, post_matcher)
+#matchers = Union(geo_location_matcher)
 matchers = Intersect(geo_location_matcher, post_matcher)
 
 # Union matchers and create candidate extractor
