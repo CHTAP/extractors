@@ -124,10 +124,12 @@ if Meta.config["model_config"]["model_path"]:
     model.load(Meta.config["model_config"]["model_path"])
 
 # Scoring
+import torch
 print("Running prediction model...")
+sft = torch.nn.Softmax()
 res = model.predict(dataloaders[0], return_preds=True, return_uids=True)
 doc_extractions = {}
-doc_extractions = {res['uids'][task_names[0]][ii]:{'prediction':int(res['preds'][task_names[0]][ii])} for ii in range(len(res['uids'][task_names[0]]))}
+doc_extractions = {res['uids'][task_names[0]][ii]:{'prediction':str(np.array(sft(torch.Tensor(res['probs'][task_names[0]][ii])))[0])} for ii in range(len(res['uids'][task_names[0]]))}
                       
 # Setting filename
 out_filename = extraction_name+"_extraction_"+filename+".jsonl"
@@ -136,7 +138,7 @@ out_path = os.path.join(out_folder, out_filename)
 
 if not os.path.exists(out_folder):
     os.makedirs(out_folder)
-                          
+print(len(doc_extractions.keys())) 
 # Saving file to jsonl in extractions format
 print(f"Saving output to {out_path}")
 with open(out_path, 'w') as outfile:

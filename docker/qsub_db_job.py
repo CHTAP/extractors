@@ -26,7 +26,7 @@ for flpth in sorted(files):
     if flpth.endswith('-db'):
         fl = os.path.split(flpth)[-1]
         #respath = os.path.join(args.outdir,'price_per_hour','price_per_hour_extraction_'+fl+'.jsonl')
-        vr = 'location'
+        vr = 'prediction'
         respath = os.path.join(args.outdir,vr,f'{vr}_extraction_'+fl+'.jsonl')
         flpth = flpth
         #if True:
@@ -36,7 +36,7 @@ for flpth in sorted(files):
             jbs+=1
         else:
             print('Already done, skipping...')
-#        if jbs >1:
+#        if jbs >0:
 #            break
     else:
         pass
