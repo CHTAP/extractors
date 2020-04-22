@@ -76,12 +76,8 @@ def regex_matcher(doc, mode=phonenumbers):
     return list(set(phone_list))
     
 # Setting extraction type -- should be a subfield in your data source extractions field!
-from dataset_utils import create_candidate_class
-extraction_type = 'phone'
+extraction_type = 'time'
 extraction_name = extraction_type
-
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
 
 # Printing number of docs/sentences
 from fonduer.parser.models import Document, Sentence
@@ -101,7 +97,7 @@ for ii, doc in enumerate(eval_cands):
     doc_extractions[doc.name] = {}
     if ii % 1000 == 0:
         print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')
-    doc_extractions[doc.name]['phone'] = regex_matcher(doc, mode='phonenumbers')
+    doc_extractions[doc.name][extraction_name] = doc.meta['time'].split('T')[1]
 
 # Setting filename
 out_filename = extraction_name+"_extraction_"+filename+".jsonl"
@@ -114,7 +110,8 @@ if not os.path.exists(out_folder):
 # Saving file to jsonl in extractions format
 print(f"Saving output to {out_path}")
 with open(out_path, 'w') as outfile:
+    d = {}
     for k,v in doc_extractions.items():
-        v['id'] = k
-        v['phone'] = list(v['phone'])
-        print(json.dumps(v), file=outfile)
+        d['id'] = k
+        d[extraction_name] = v[extraction_name]
+        print(json.dumps(d), file=outfile)

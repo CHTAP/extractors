@@ -123,9 +123,8 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
             cand = cands[ind]
         else:
             cand = cands.get_candidate(session,ind)
-        parent = cand.get_parent()
-        url = parent.document.meta['url']
-        doc_name = parent.document.name
+        url = cand.document.meta['url']
+        doc_name = cand.document.name
 
         # Initializing key if it doesn't exist
         if doc_name not in doc_extractions.keys():
@@ -139,7 +138,8 @@ def create_extractions_dict(session, cands, train_marginals, extractions, dummy=
         # Adding extraction to extractions dict if prediction == 1
         if train_cand_preds[ind] == 1:
             for extraction in extractions:
-                ext = getattr(cand,extraction).get_span().lower()
+                mention_type = f"{extraction}_mention"
+                ext = getattr(cand,mention_type).context.get_span().lower()
                 if extraction == 'phone':
                     ext = phone_eval(ext)
                     doc_extractions.append[doc_name][extraction].append(ext)

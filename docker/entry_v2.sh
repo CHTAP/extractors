@@ -3,10 +3,7 @@ source activate chtap
 echo "Entry point activated!"
 
 echo "Moving to extractor working directory"
-cd /home/repos/extractors/docker
-
-echo "Pulling repo"
-git pull origin fonduer_extractors
+cd /code/docker
 
 echo "Starting postgres"
 sudo pg_createcluster 11 main
@@ -22,7 +19,7 @@ do
 echo "$entry"
 if [ "$entry" != "/data/input.csv" ]; then
     echo "Running extractors on $entry"
-    bash /home/repos/extractors/docker/run_extractors.sh $entry /config/run_config.json
+    bash /code/docker/run_extractors_v2.sh $entry /config/run_config.json
 fi
 done
 

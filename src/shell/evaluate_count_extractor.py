@@ -54,34 +54,8 @@ seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
 
-# Defining regex matcher function
-import phonenumbers, re
-def regex_matcher(doc, mode=phonenumbers):
-    phone_list = []
-    results_list = []
-    r = re.compile(r'\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4}')
-    if mode == 'regex':
-        for s in doc.sentences:
-            txt = s.text
-            results = r.findall(txt)
-            for x in results:
-                phone_list.append(str(x))
-    elif mode == 'phonenumbers':
-         for s in doc.sentences:
-            txt = s.text
-            for match in phonenumbers.PhoneNumberMatcher(txt,"US"):
-                format_match = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.E164)
-                phone_list.append(str(format_match))
-                
-    return list(set(phone_list))
-    
 # Setting extraction type -- should be a subfield in your data source extractions field!
-from dataset_utils import create_candidate_class
-extraction_type = 'phone'
-extraction_name = extraction_type
-
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
+extraction_name = 'count'
 
 # Printing number of docs/sentences
 from fonduer.parser.models import Document, Sentence
@@ -94,15 +68,7 @@ print("==============================")
 eval_cands = session.query(Document).all()
 print(f'Loaded {len(eval_cands)} candidate documents...')
 
-# Getting gold label for each doc
-print("Running regex extractor...")
-doc_extractions = {}
-for ii, doc in enumerate(eval_cands):
-    doc_extractions[doc.name] = {}
-    if ii % 1000 == 0:
-        print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')
-    doc_extractions[doc.name]['phone'] = regex_matcher(doc, mode='phonenumbers')
-
+doc_extractions = {'count':len(eval_cands)}
 # Setting filename
 out_filename = extraction_name+"_extraction_"+filename+".jsonl"
 out_folder = os.path.join(config['output_dir'], extraction_name)
@@ -114,7 +80,4 @@ if not os.path.exists(out_folder):
 # Saving file to jsonl in extractions format
 print(f"Saving output to {out_path}")
 with open(out_path, 'w') as outfile:
-    for k,v in doc_extractions.items():
-        v['id'] = k
-        v['phone'] = list(v['phone'])
-        print(json.dumps(v), file=outfile)
+    print(json.dumps(doc_extractions), file=outfile)

@@ -1,4 +1,3 @@
-from snorkel.matchers import RegexMatchEach
 import os
 import sys
 import codecs
@@ -25,7 +24,21 @@ from multiprocessing import Pool
 
 from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
 from snorkel.models import Document, Candidate, candidate_subclass, GoldLabel, GoldLabelKey
-#from snorkel.utils import ProgressBar
+from snorkel.matchers import RegexMatchEach
+
+#from fonduer.parser.preprocessors.doc_preprocessor import DocPreprocessor
+#from fonduer.parser.preprocessors.html_doc_preprocessor import HTMLDocPreprocessor
+#from fonduer.parser.models import Document, Sentence
+#from fonduer.candidates.models import Candidate
+#from fonduer.candidates.models import candidate_subclass
+#from fonduer.supervision.models.label import GoldLabel, GoldLabelKey
+#from fonduer.candidates.matchers import RegexMatchEach
+
+#from fonduer.parser.models import Document, Sentence
+#from snorkel.parser import DocPreprocessor, HTMLDocPreprocessor
+#from snorkel.models import  candidate_subclass
+#from snorkel.matchers import RegexMatchEach
+
 from tqdm import tqdm
 
 ######################################################################################################
@@ -636,7 +649,7 @@ def get_candidate_stable_id(can):
 
 # MOST OF THESE CLASSES ARE DIFFS OFF OF EXISTING SNORKEL PREPROCESSORS
 
-from snorkel.udf import UDF, UDFRunner
+from fonduer.utils.udf import UDF, UDFRunner
 from copy import deepcopy
 from itertools import product
 

@@ -4,9 +4,11 @@ import sys
 import random
 import numpy as np
 import json
+import pickle
 
 # Adding path for utils
 sys.path.append('../utils')
+from emmental_utils import load_data_from_db
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -41,12 +43,11 @@ if config['use_pg']:
 else:
     print('Using SQLite...')
 
-# Start Snorkel session
-from snorkel import SnorkelSession
-session = SnorkelSession()
 
-#import torch first to stop TLS error
-from dm_utils import LSTM
+from fonduer import Meta
+# Start DB connection
+conn_string = os.path.join(config['postgres_location'],config['postgres_db_name'])
+session = Meta.init(conn_string).Session()
 
 # Setting up parallelism
 parallelism = config['parallelism']
@@ -57,45 +58,67 @@ random.seed(seed)
 np.random.seed(seed)
 
 # Printing number of docs/sentences
-from snorkel.models import Document, Sentence
+from fonduer.parser.models import Document, Sentence
 # Printing number of docs/sentences
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print("Documents:", session.query(Document).count())
-print("Sentences:", session.query(Sentence).count())
+#print("Sentences:", session.query(Sentence).count())
 print("==============================")
 
 # Getting all documents parsed by Snorkel
 print("Getting documents and sentences...")
 docs = session.query(Document).all()
-sents = session.query(Sentence).all()
+#sents = session.query(Sentence).all()
 
-from snorkel.candidates import Ngrams
-from snorkel.candidates import CandidateExtractor
-from dataset_utils import create_candidate_class, LocationMatcher, city_index
-from snorkel.matchers import Union, LambdaFunctionMatcher
+from fonduer.candidates import CandidateExtractor, MentionExtractor, MentionNgrams
+from fonduer.candidates.models import mention_subclass, candidate_subclass
+from dataset_utils import LocationMatcher, city_index
+from fonduer.candidates.matchers import Union, LambdaFunctionMatcher, Intersect
+from emmental_utils import get_posting_html_fast
     
-# Setting extraction type -- should be a subfield in your data source extractions field!
-extraction_type = 'location'
-
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
-
 # Defining ngrams for candidates
-location_ngrams = Ngrams(n_max=3)
+extraction_name = 'location'
+ngrams = MentionNgrams(n_max=3)
 
 # Define matchers
+# Geolocation matcher
 cities = city_index('../utils/data/cities15000.txt')
 geo_location_matcher = LambdaFunctionMatcher(func=cities.fast_loc)
+
+# In raw text matcher
+with open(f"{config['prediction_model_path']}/char_dict.pkl",'rb') as fl:
+    char_dict = pickle.load(fl)
+dataset = load_data_from_db(postgres_db_name, config['postgres_location'], {},char_dict=char_dict, clobber_label=True)
+text_dict = {a[0]['uid']: a[0]['text'] for a in dataset}
+
+def post_matcher_fun(m):
+    term = r"([Ll]ocation:[\w\W]{1,200}</.{0,20}>|\W[cC]ity:[\w\W]{1,200}</.{0,20}>|\d\dyo\W|\d\d.{0,10}\Wyo\W|\d\d.{0,10}\Wold\W|\d\d.{0,10}\Wyoung\W|\Wage\W.{0,10}\d\d)"
+    #if m.get_span() in get_posting_html_fast(m.sentence.document.text, term):
+    if m.get_span() in text_dict[m.sentence.document.name]:
+        return True
+    else:
+        return False
+
+post_matcher = LambdaFunctionMatcher(func=post_matcher_fun)
+
 #spacy_location_matcher = LocationMatcher(longest_match_only=True)
+#matchers = Union(geo_location_matcher)
+matchers = Intersect(geo_location_matcher, post_matcher)
 
 # Union matchers and create candidate extractor
 print("Extracting candidates...")
-location_matcher = Union(geo_location_matcher)
-cand_extractor   = CandidateExtractor(candidate_class, [location_ngrams], [location_matcher])
+LocationMention = mention_subclass("LocationMention")
+mention_extractor = MentionExtractor(
+        session, [LocationMention], [ngrams], [matchers]
+    )
+mention_extractor.clear_all()
+mention_extractor.apply(docs, parallelism=parallelism)
+candidate_class = candidate_subclass("Location", [LocationMention])
+candidate_extractor = CandidateExtractor(session, [candidate_class])
 
 # Applying candidate extractors
-cand_extractor.apply(sents, split=0, parallelism=parallelism)
+candidate_extractor.apply(docs, split=0, parallelism=parallelism)
 print("==============================")
 print(f"Candidate extraction results for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())

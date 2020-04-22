@@ -55,7 +55,7 @@ def scrub(s):
     return ''.join(c for c in s if ord(c) < 128)
 
 def candidate_to_tokens(candidate, token_type='words', lowercase=False):
-    text =  candidate.get_span()
+    text =  candidate.context.sentence.text
     tokens = parser(text)
     tokens = [token.orth_ for token in tokens if not token.orth_.isspace()]
     return [scrub(w).lower() if lowercase else scrub(w) for w in tokens]
@@ -203,10 +203,11 @@ class LSTM(TFNoiseAwareModel):
         #    s = mark_sentence(candidate_to_tokens(candidate), args)
         
             # Assumes candidate has one extraction type!
-            extractions_dict = ['location', 'phone', 'price']
+            extractions_dict = ['location']
             for typ in extractions_dict:
-                if hasattr(candidate, typ):
-                    ext = getattr(candidate, typ)
+                mention_type = f"{typ}_mention"
+                if hasattr(candidate, mention_type):
+                    ext = getattr(candidate, mention_type)
             s = candidate_to_tokens(ext)
             # Either extend word table or retrieve from it
             f = self.word_dict.get if extend else self.word_dict.lookup

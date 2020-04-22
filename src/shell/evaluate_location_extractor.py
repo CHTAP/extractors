@@ -44,8 +44,13 @@ else:
     print('Using SQLite...')
 
 # Start Snorkel session
-from snorkel import SnorkelSession
-session = SnorkelSession()
+#from snorkel import SnorkelSession
+#session = SnorkelSession()
+
+from fonduer import Meta
+# Start DB connection
+conn_string = os.path.join(config['postgres_location'],config['postgres_db_name'])
+session = Meta.init(conn_string).Session()
 
 #import torch first to stop TLS error
 from dm_utils import LSTM
@@ -55,17 +60,16 @@ parallelism = config['parallelism']
 seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
+
+from fonduer.candidates.models import mention_subclass, candidate_subclass
     
 # Setting extraction type -- should be a subfield in your data source extractions field!
-from dataset_utils import create_candidate_class
-extraction_type = 'location'
-extraction_name = extraction_type
-
-# Creating candidate class
-candidate_class, candidate_class_name = create_candidate_class(extraction_type)
+extraction_name = 'location'
+LocationMention = mention_subclass("LocationMention")
+candidate_class = candidate_subclass("Location", [LocationMention])
 
 # Printing number of docs/sentences
-from snorkel.models import Document, Sentence
+from fonduer.parser.models import Document, Sentence
 print("==============================")
 print(f"DB contents for {postgres_db_name}:")
 print("Number of candidates:", session.query(candidate_class).filter(candidate_class.split == 0).count())
@@ -108,7 +112,7 @@ else:
     eval_marginals = lstm._marginals_batch(eval_cands)
     print('Marginals computed...')
 #except:
-    print('Exception in marginals')
+#    print('Exception in marginals')
 
 #eval_marginals = torch.zeros((len(eval_cands),))
 # Geocoding
@@ -118,7 +122,7 @@ from gm_utils import create_extractions_dict, create_extractions_dict_parallel
 geocode_key = None
 # geocode_key = 'AIzaSyBlLyOaasYMgMxFGUh2jJyxIG0_pZFF_jM'
 print("Creating extractions dictionary...")
-doc_extractions = create_extractions_dict_parallel(session, eval_cands, eval_marginals, extractions=[extraction_type],
+doc_extractions = create_extractions_dict_parallel(session, eval_cands, eval_marginals, extractions=[extraction_name],
                                          dummy=False, geocode_key=geocode_key, slices=1)
 #except:
 #    print('Exception in creating extractions dict')
