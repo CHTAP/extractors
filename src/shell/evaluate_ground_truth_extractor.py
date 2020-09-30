@@ -3,6 +3,7 @@ import os
 import sys
 import random
 import numpy as np
+import pandas as pd
 import json
 
 # Adding path for utils
@@ -54,30 +55,33 @@ seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
 
-# Defining regex matcher function
-import phonenumbers, re
-def regex_matcher(doc, mode=phonenumbers):
+# load ground truth data
+gt_pos_path = './ground_truth/confirmed_ht.csv'
+gt_neg_path = './ground_truth/experiment_negatives.csv'
+gt_pos_df = pd.read_csv(gt_pos_path)
+gt_neg_df = pd.read_csv(gt_neg_path)
+GT_POS = set(['+1'+ a for a in gt_pos_df[gt_pos_df['ht'].astype(int)==1]['tip'].astype(str).tolist()])
+GT_NEG = set(['+1'+ a for a in gt_neg_df[gt_neg_df['ht'].astype(int)==0]['number'].astype(str).tolist()])
+
+import phonenumbers
+def matcher(doc):
     phone_list = []
-    results_list = []
-    r = re.compile(r'\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4}')
-    if mode == 'regex':
-        for s in doc.sentences:
-            txt = s.text
-            results = r.findall(txt)
-            for x in results:
-                phone_list.append(str(x))
-    elif mode == 'phonenumbers':
-         for s in doc.sentences:
-            txt = s.text
-            for match in phonenumbers.PhoneNumberMatcher(txt,"US"):
-                format_match = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.E164)
-                phone_list.append(str(format_match))
-                
-    return list(set(phone_list))
+    for s in doc.sentences:
+        txt = s.text
+        for match in phonenumbers.PhoneNumberMatcher(txt,"US"):
+            format_match = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.E164)
+            phone_list.append(str(format_match))
+    phone_set = set(phone_list)
+    if set.intersection(phone_set, GT_POS):
+        return [1]
+    if set.intersection(phone_set, GT_NEG):
+        return [2]
+    else:
+        return [0]
     
 # Setting extraction type -- should be a subfield in your data source extractions field!
 from dataset_utils import create_candidate_class
-extraction_type = 'phone'
+extraction_type = 'ground_truth'
 extraction_name = extraction_type
 
 # Creating candidate class
@@ -101,9 +105,7 @@ for ii, doc in enumerate(eval_cands):
     doc_extractions[doc.name] = {}
     if ii % 1000 == 0:
         print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')
-    doc_extractions[doc.name]['phone'] = regex_matcher(doc, mode='phonenumbers')
-    if ii==1000:
-        break
+    doc_extractions[doc.name]['ground_truth'] = matcher(doc)
 
 # Setting filename
 out_filename = extraction_name+"_extraction_"+filename+".jsonl"
@@ -118,5 +120,5 @@ print(f"Saving output to {out_path}")
 with open(out_path, 'w') as outfile:
     for k,v in doc_extractions.items():
         v['id'] = k
-        v['phone'] = list(v['phone'])
+        v['ground_truth'] = list(v['ground_truth'])
         print(json.dumps(v), file=outfile)

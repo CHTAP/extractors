@@ -3,6 +3,7 @@ import os
 import sys
 import random
 import numpy as np
+import pandas as pd
 import json
 
 # Adding path for utils
@@ -54,30 +55,16 @@ seed = config['seed']
 random.seed(seed)
 np.random.seed(seed)
 
-# Defining regex matcher function
-import phonenumbers, re
-def regex_matcher(doc, mode=phonenumbers):
-    phone_list = []
-    results_list = []
-    r = re.compile(r'\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4}')
-    if mode == 'regex':
-        for s in doc.sentences:
-            txt = s.text
-            results = r.findall(txt)
-            for x in results:
-                phone_list.append(str(x))
-    elif mode == 'phonenumbers':
-         for s in doc.sentences:
-            txt = s.text
-            for match in phonenumbers.PhoneNumberMatcher(txt,"US"):
-                format_match = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.E164)
-                phone_list.append(str(format_match))
-                
-    return list(set(phone_list))
+def get_text(doc):
+    total = ''
+    for s in doc.sentences:
+        txt = s.text
+        total += '\n' + s.text
+    return [total]
     
 # Setting extraction type -- should be a subfield in your data source extractions field!
 from dataset_utils import create_candidate_class
-extraction_type = 'phone'
+extraction_type = 'text'
 extraction_name = extraction_type
 
 # Creating candidate class
@@ -101,9 +88,7 @@ for ii, doc in enumerate(eval_cands):
     doc_extractions[doc.name] = {}
     if ii % 1000 == 0:
         print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')
-    doc_extractions[doc.name]['phone'] = regex_matcher(doc, mode='phonenumbers')
-    if ii==1000:
-        break
+    doc_extractions[doc.name]['text'] = get_text(doc)
 
 # Setting filename
 out_filename = extraction_name+"_extraction_"+filename+".jsonl"
@@ -118,5 +103,5 @@ print(f"Saving output to {out_path}")
 with open(out_path, 'w') as outfile:
     for k,v in doc_extractions.items():
         v['id'] = k
-        v['phone'] = list(v['phone'])
+        v['text'] = list(v['text'])
         print(json.dumps(v), file=outfile)

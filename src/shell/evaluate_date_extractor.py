@@ -98,6 +98,8 @@ for ii, doc in enumerate(eval_cands):
     if ii % 1000 == 0:
         print(f'Extracting regexes from doc {ii} out of {len(eval_cands)}')
     doc_extractions[doc.name][extraction_name] = doc.meta['time'].split('T')[0]
+    if ii == 1000:
+        break
 
 # Setting filename
 out_filename = extraction_name+"_extraction_"+filename+".jsonl"
